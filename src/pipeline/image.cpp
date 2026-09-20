@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <limits>
 #include <optional>
 
 #include "core/rng.hpp"
@@ -13,6 +14,45 @@
 #include "upscaler.h"
 
 namespace sd::pipeline {
+
+    static void log_tensor_finite_stats(const char* tag, size_t index, const sd::Tensor<float>& tensor) {
+        if (tensor.empty()) {
+            LOG_WARN("%s %zu: empty tensor", tag, index);
+            return;
+        }
+        const auto& vals = tensor.values();
+        const size_t n   = vals.size();
+        size_t nan       = 0;
+        size_t inf       = 0;
+        float mn         = std::numeric_limits<float>::infinity();
+        float mx         = -std::numeric_limits<float>::infinity();
+        double sum       = 0.0;
+        for (float v : vals) {
+            if (!std::isfinite(v)) {
+                if (std::isnan(v)) {
+                    nan++;
+                } else {
+                    inf++;
+                }
+                continue;
+            }
+            mn = std::min(mn, v);
+            mx = std::max(mx, v);
+            sum += static_cast<double>(v);
+        }
+        const size_t finite = n - nan - inf;
+        const double mean   = finite > 0 ? sum / static_cast<double>(finite) : 0.0;
+        LOG_INFO("%s %zu: n=%zu nan=%zu inf=%zu finite=%zu min=%g max=%g mean=%g",
+                 tag,
+                 index,
+                 n,
+                 nan,
+                 inf,
+                 finite,
+                 mn,
+                 mx,
+                 mean);
+    }
 
     struct CircularAxesState {
         bool circular_x = false;
@@ -596,11 +636,13 @@ namespace sd::pipeline {
                     decoded_images.push_back(std::move(image));
                 }
             } else {
+                log_tensor_finite_stats("latent_pre_vae", i, final_latents[i]);
                 sd::Tensor<float> image = sd->decode_first_stage(final_latents[i]);
                 if (image.empty()) {
                     LOG_ERROR("decode_first_stage failed for latent %" PRId64, i + 1);
                     return nullptr;
                 }
+                log_tensor_finite_stats("decoded", i, image);
                 decoded_images.push_back(std::move(image));
             }
             int64_t t2 = ggml_time_ms();
@@ -884,6 +926,7 @@ namespace sd::pipeline {
             int64_t sampling_end  = ggml_time_ms();
             if (!x_0.empty()) {
                 LOG_INFO("sampling completed, taking %.2fs", (sampling_end - sampling_start) * 1.0f / 1000);
+                log_tensor_finite_stats("latent_post_sample", static_cast<size_t>(b), x_0);
                 final_latents.push_back(std::move(x_0));
                 continue;
             }
