@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Minimal SD.cpp Studio</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --panel: #1a1d27;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --border: #333a4f;
+      --input-bg: #232736;
+    }
+    body {
+      margin: 0;
+      padding: 1.5rem;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      gap: 1.5rem;
+      height: 100vh;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .controls {
+      width: 420px;
+      min-width: 380px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+    .viewport {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--panel);
+      border-radius: 12px;
+      border: 1px dashed var(--muted);
+      overflow: hidden;
+      position: relative;
+    }
+    textarea, input, select {
+      width: 100%;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem 0.6rem;
+      border-radius: 6px;
+      box-sizing: border-box;
+      font-size: 0.85rem;
+    }
+    input[type="number"] {
+      width: 75px;
+      text-align: right;
+    }
+    input[type="range"] {
+      flex: 1;
+      padding: 0;
+      accent-color: var(--accent);
+    }
+    textarea { height: 70px; resize: vertical; }
+    label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.25rem;
+      display: block;
+    }
+    .field-group { display: flex; flex-direction: column; }
+    .slider-row { display: flex; align-items: center; gap: 0.5rem; }
+    .row { display: flex; gap: 0.5rem; }
+
+    details {
+      background: rgba(0, 0, 0, 0.2);
+      padding: 0.6rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    summary {
+      cursor: pointer;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--accent);
+      font-weight: 600;
+      user-select: none;
+    }
+    .details-body {
+      margin-top: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    button.btn-primary {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 0.8rem;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button.btn-primary:hover { background: var(--accent-hover); }
+    button.btn-secondary {
+      background: #333a4f;
+      color: var(--text);
+      border: none;
+      padding: 0.4rem 0.6rem;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .gallery {
+      display: flex;
+      gap: 0.5rem;
+      max-width: 100%;
+      max-height: 100%;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      overflow: auto;
+      padding: 1rem;
+    }
+    .gallery img {
+      max-width: 100%;
+      max-height: 85vh;
+      object-fit: contain;
+      border-radius: 8px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+    }
+    .status { position: absolute; bottom: 1rem; font-size: 0.85rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+
+  <div class="controls">
+    <div class="field-group">
+      <label>Prompt</label>
+      <textarea id="prompt" placeholder="A cozy cabin in the misty pine forest...">a cinematic shot of an ancient library, dust motes in sunbeams, hyperrealistic, octane render</textarea>
+    </div>
+
+    <div class="field-group">
+      <label>Negative Prompt</label>
+      <textarea id="negPrompt" style="height: 45px;">blurry, low quality, distorted, watermark</textarea>
+    </div>
+
+    <!-- Seed & Randomizer -->
+    <div class="field-group">
+      <label>Seed (-1 for Random)</label>
+      <div class="row">
+        <input type="number" id="seed" value="-1" style="flex: 1;" />
+        <button class="btn-secondary" title="Roll New Seed" onclick="rollSeed()">🎲 Roll</button>
+        <button class="btn-secondary" title="Reset to Random" onclick="document.getElementById('seed').value = -1">🔄 -1</button>
+      </div>
+    </div>
+
+    <!-- Steps -->
+    <div class="field-group">
+      <label>Sampling Steps</label>
+      <div class="slider-row">
+        <input type="range" id="steps" min="1" max="100" value="20" oninput="stepsNum.value = this.value" />
+        <input type="number" id="stepsNum" min="1" max="100" value="20" oninput="steps.value = this.value" />
+      </div>
+    </div>
+
+    <!-- CFG Scale -->
+    <div class="field-group">
+      <label>CFG Scale</label>
+      <div class="slider-row">
+        <input type="range" id="cfg" min="1" max="25" step="0.5" value="7.0" oninput="cfgNum.value = this.value" />
+        <input type="number" id="cfgNum" min="1" max="25" step="0.5" value="7.0" oninput="cfg.value = this.value" />
+      </div>
+    </div>
+
+    <!-- Resolution -->
+    <div class="row">
+      <div class="field-group" style="flex:1">
+        <label>Width</label>
+        <input type="number" id="width" min="64" max="2048" step="64" value="512" />
+      </div>
+      <div class="field-group" style="flex:1">
+        <label>Height</label>
+        <input type="number" id="height" min="64" max="2048" step="64" value="512" />
+      </div>
+      <div class="field-group" style="flex:1">
+        <label>Preset</label>
+        <select onchange="applyPreset(this.value)">
+          <option value="512x512">512×512</option>
+          <option value="768x768">768×768</option>
+          <option value="1024x1024">1024×1024</option>
+          <option value="512x768">512×768</option>
+          <option value="768x512">768×512</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Sampler & Scheduler -->
+    <div class="row">
+      <div class="field-group" style="flex:1">
+        <label>Sampler</label>
+        <select id="sampler">
+          <option value="euler">Euler</option>
+          <option value="euler_a" selected>Euler a</option>
+          <option value="dpm++2m">DPM++ 2M</option>
+          <option value="dpm++2s_a">DPM++ 2S a</option>
+          <option value="heun">Heun</option>
+          <option value="lcm">LCM</option>
+          <option value="ddim_trailing">DDIM</option>
+        </select>
+      </div>
+      <div class="field-group" style="flex:1">
+        <label>Schedule Type</label>
+        <select id="scheduler">
+          <option value="" selected>Default</option>
+          <option value="discrete">Discrete</option>
+          <option value="karras">Karras</option>
+          <option value="exponential">Exponential</option>
+          <option value="ays">AYS</option>
+          <option value="sgm_uniform">SGM Uniform</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Generation & Clip Skip -->
+    <div class="row">
+      <div class="field-group" style="flex:1">
+        <label>Batch Size</label>
+        <input type="number" id="batchSize" min="1" max="8" value="1" />
+      </div>
+      <div class="field-group" style="flex:1">
+        <label>Clip Skip</label>
+        <input type="number" id="clipSkip" min="1" max="4" value="1" />
+      </div>
+    </div>
+
+    <!-- Highres Fix Panel -->
+    <details>
+      <summary>Highres Fix (Upscale)</summary>
+      <div class="details-body">
+        <label style="display:flex; align-items:center; gap:0.5rem; text-transform:none; cursor:pointer;">
+          <input type="checkbox" id="enableHr" style="width:auto;" /> Enable Highres Fix
+        </label>
+        <div class="row">
+          <div class="field-group" style="flex:1">
+            <label>Scale Multiplier</label>
+            <input type="number" id="hrScale" min="1.0" max="4.0" step="0.25" value="2.0" />
+          </div>
+          <div class="field-group" style="flex:1">
+            <label>HR Steps (0=match)</label>
+            <input type="number" id="hrSteps" min="0" max="100" value="10" />
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Denoising Strength</label>
+          <div class="slider-row">
+            <input type="range" id="hrDenoise" min="0" max="1" step="0.05" value="0.5" oninput="hrDenoiseNum.value = this.value" />
+            <input type="number" id="hrDenoiseNum" min="0" max="1" step="0.05" value="0.5" oninput="hrDenoise.value = this.value" />
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <button id="genBtn" class="btn-primary" onclick="generate()">Generate Image</button>
+  </div>
+
+  <div class="viewport">
+    <div id="gallery" class="gallery"></div>
+    <div id="status" class="status">Ready (Target: Port 1493)</div>
+  </div>
+
+  <script>
+    function rollSeed() {
+      document.getElementById('seed').value = Math.floor(Math.random() * 2147483647);
+    }
+
+    function applyPreset(val) {
+      const [w, h] = val.split('x').map(Number);
+      document.getElementById('width').value = w;
+      document.getElementById('height').value = h;
+    }
+
+    async function generate() {
+      const btn = document.getElementById('genBtn');
+      const status = document.getElementById('status');
+      const gallery = document.getElementById('gallery');
+
+      btn.disabled = true;
+      status.innerText = "Processing job in sd-server...";
+
+      const enableHr = document.getElementById('enableHr').checked;
+      const seedVal = Number(document.getElementById('seed').value);
+
+      const payload = {
+        prompt: document.getElementById('prompt').value,
+        negative_prompt: document.getElementById('negPrompt').value,
+        steps: Number(document.getElementById('stepsNum').value),
+        cfg_scale: Number(document.getElementById('cfgNum').value),
+        width: Number(document.getElementById('width').value),
+        height: Number(document.getElementById('height').value),
+        seed: seedVal === -1 ? Math.floor(Math.random() * 2147483647) : seedVal,
+        batch_size: Number(document.getElementById('batchSize').value),
+        sampler_name: document.getElementById('sampler').value,
+        clip_skip: Number(document.getElementById('clipSkip').value),
+
+        // High-res fix parameters
+        enable_hr: enableHr,
+        hr_scale: enableHr ? Number(document.getElementById('hrScale').value) : 1.0,
+        hr_steps: enableHr ? Number(document.getElementById('hrSteps').value) : 0,
+        denoising_strength: enableHr ? Number(document.getElementById('hrDenoiseNum').value) : 0.7
+      };
+
+      const scheduler = document.getElementById('scheduler').value;
+      if (scheduler) payload.scheduler = scheduler;
+
+      try {
+        const res = await fetch('http://127.0.0.1:1493/sdapi/v1/txt2img', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        // Clear previous outputs
+        gallery.innerHTML = '';
+
+        // Render images returned in batch
+        data.images.forEach(b64 => {
+          const img = document.createElement('img');
+          img.src = 'data:image/png;base64,' + b64;
+          gallery.appendChild(img);
+        });
+
+        const usedSampler = (data.parameters && data.parameters.sampler_name) || payload.sampler_name;
+        let infoSampler = usedSampler;
+        try {
+          if (data.info) {
+            const info = typeof data.info === 'string' ? JSON.parse(data.info) : data.info;
+            if (info && info.sampler_name) infoSampler = info.sampler_name;
+          }
+        } catch (e) { /* keep usedSampler */ }
+        status.innerText = `Done! Seed: ${payload.seed}  Sampler: ${infoSampler}`;
+      } catch (err) {
+        status.innerText = "Error: " + err.message + " (Check terminal/CORS)";
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
