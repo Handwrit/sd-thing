@@ -2,8 +2,10 @@
 #include <atomic>
 #include <chrono>
 #include <cinttypes>
+#include <cmath>
 #include <cstdarg>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <functional>
 #include <mutex>
@@ -902,6 +904,62 @@ std::vector<MmapTensorStore> ModelLoader::mmap_tensors(std::map<std::string, ggm
     return result;
 }
 
+static bool sd_verify_backend_copy_enabled() {
+    const char* env = std::getenv("SD_VERIFY_BACKEND_COPY");
+    return env != nullptr && env[0] != '\0' && env[0] != '0';
+}
+
+// Read every uploaded tensor back from the device and memcmp with the host
+// bytes just written. ggml_backend_tensor_get is a synchronous D2H copy.
+static void sd_verify_backend_tensor_roundtrip(ggml_tensor* dst,
+                                               const void* host,
+                                               size_t nbytes,
+                                               std::atomic<uint64_t>* n_ok,
+                                               std::atomic<uint64_t>* n_bad) {
+    std::vector<char> back(nbytes);
+    ggml_backend_tensor_get(dst, back.data(), 0, nbytes);
+    if (std::memcmp(host, back.data(), nbytes) == 0) {
+        n_ok->fetch_add(1);
+        return;
+    }
+    const uint64_t bad_i = n_bad->fetch_add(1) + 1;
+    size_t first         = 0;
+    const auto* a        = static_cast<const unsigned char*>(host);
+    const auto* b        = reinterpret_cast<const unsigned char*>(back.data());
+    while (first < nbytes && a[first] == b[first]) {
+        first++;
+    }
+    float max_abs = 0.f;
+    size_t nan_h  = 0;
+    size_t nan_d  = 0;
+    if (dst->type == GGML_TYPE_F32 && nbytes >= sizeof(float)) {
+        const auto* hf = static_cast<const float*>(host);
+        const auto* df = reinterpret_cast<const float*>(back.data());
+        const size_t n = nbytes / sizeof(float);
+        for (size_t i = 0; i < n; i++) {
+            if (std::isnan(hf[i])) {
+                nan_h++;
+            }
+            if (std::isnan(df[i])) {
+                nan_d++;
+            }
+            if (std::isfinite(hf[i]) && std::isfinite(df[i])) {
+                max_abs = std::max(max_abs, std::fabs(hf[i] - df[i]));
+            }
+        }
+    }
+    if (bad_i <= 8) {
+        LOG_WARN("backend copy mismatch %s type=%s nbytes=%zu first_off=%zu max_abs=%g host_nan=%zu device_nan=%zu",
+                 dst->name[0] ? dst->name : "(unnamed)",
+                 ggml_type_name(dst->type),
+                 nbytes,
+                 first,
+                 max_abs,
+                 nan_h,
+                 nan_d);
+    }
+}
+
 bool ModelLoader::load_tensors(on_new_tensor_cb_t on_new_tensor_cb,
                                bool enable_mmap,
                                const std::set<std::string>* target_tensor_names,
@@ -916,6 +974,10 @@ bool ModelLoader::load_tensors(on_new_tensor_cb_t on_new_tensor_cb,
     std::atomic<int64_t> copy_to_backend_time_ms(0);
     std::atomic<int64_t> convert_time_ms(0);
     std::atomic<uint64_t> bytes_processed(0);
+    std::atomic<uint64_t> backend_copy_ok(0);
+    std::atomic<uint64_t> backend_copy_bad(0);
+    std::atomic<uint64_t> backend_copy_bytes(0);
+    const bool verify_backend_copy = sd_verify_backend_copy_enabled();
 
     int num_threads_to_use = n_threads_;
 
@@ -1173,7 +1235,16 @@ bool ModelLoader::load_tensors(on_new_tensor_cb_t on_new_tensor_cb,
                         t0 = ggml_time_ms();
 
                         std::lock_guard<std::mutex> lock(backend_tensor_set_mutex);
-                        ggml_backend_tensor_set(dst_tensor, convert_buf, 0, ggml_nbytes(dst_tensor));
+                        const size_t nbytes = ggml_nbytes(dst_tensor);
+                        ggml_backend_tensor_set(dst_tensor, convert_buf, 0, nbytes);
+                        if (verify_backend_copy) {
+                            sd_verify_backend_tensor_roundtrip(dst_tensor,
+                                                               convert_buf,
+                                                               nbytes,
+                                                               &backend_copy_ok,
+                                                               &backend_copy_bad);
+                            backend_copy_bytes.fetch_add(nbytes);
+                        }
 
                         t1 = ggml_time_ms();
                         copy_to_backend_time_ms.fetch_add(t1 - t0);
@@ -1231,6 +1302,12 @@ bool ModelLoader::load_tensors(on_new_tensor_cb_t on_new_tensor_cb,
                  (memcpy_time_ms.load() / (float)last_n_threads) / 1000.f,
                  (convert_time_ms.load() / (float)last_n_threads) / 1000.f,
                  (copy_to_backend_time_ms.load() / (float)last_n_threads) / 1000.f);
+        if (verify_backend_copy) {
+            LOG_INFO("backend copy verify: ok=%" PRIu64 " mismatch=%" PRIu64 " bytes=%" PRIu64,
+                     backend_copy_ok.load(),
+                     backend_copy_bad.load(),
+                     backend_copy_bytes.load());
+        }
     }
     return success && validate_sources(target_tensor_names);
 }
