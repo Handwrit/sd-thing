@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Local RX 6950 XT (gfx1030) launcher for sd-server.
-# HIP graphs crash this card mid-UNet; keep them off.
+# HIP graphs crash this card mid-UNet; keep them off at runtime.
+# GPU VAE decode produced white/speckled frames; decode on CPU.
+# --rng cpu matches ComfyUI noise (README); default cuda is WebUI RNG.
 # Do not pass --linear-scale 0.0078125 here: on SD 1.4 it produced all-white images.
 
 set -euo pipefail
@@ -19,4 +21,6 @@ exec "$BIN" \
   -m "$MODEL" \
   --listen-port "$PORT" \
   --lora-model-dir "$LORA_DIR" \
+  --rng cpu \
+  --vae-on-cpu \
   "$@"
