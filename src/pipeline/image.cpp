@@ -2,9 +2,12 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <limits>
 #include <optional>
+#include <string>
 
 #include "core/rng.hpp"
 #include "diffusion_engine.h"
@@ -20,14 +23,21 @@ namespace sd::pipeline {
             LOG_WARN("%s %zu: empty tensor", tag, index);
             return;
         }
-        const auto& vals = tensor.values();
-        const size_t n   = vals.size();
-        size_t nan       = 0;
-        size_t inf       = 0;
-        float mn         = std::numeric_limits<float>::infinity();
-        float mx         = -std::numeric_limits<float>::infinity();
-        double sum       = 0.0;
-        for (float v : vals) {
+        const auto& vals  = tensor.values();
+        const auto& shape = tensor.shape();
+        const size_t n    = vals.size();
+        size_t nan        = 0;
+        size_t inf        = 0;
+        size_t abs4       = 0;
+        size_t abs5       = 0;
+        float mn          = std::numeric_limits<float>::infinity();
+        float mx          = -std::numeric_limits<float>::infinity();
+        double sum        = 0.0;
+        int top_i[8];
+        float top_a[8];
+        int ntop = 0;
+        for (size_t i = 0; i < n; i++) {
+            float v = vals[i];
             if (!std::isfinite(v)) {
                 if (std::isnan(v)) {
                     nan++;
@@ -39,19 +49,109 @@ namespace sd::pipeline {
             mn = std::min(mn, v);
             mx = std::max(mx, v);
             sum += static_cast<double>(v);
+            const float a = std::fabs(v);
+            if (a > 4.f) {
+                abs4++;
+            }
+            if (a > 5.f) {
+                abs5++;
+            }
+            if (ntop < 8) {
+                top_i[ntop] = static_cast<int>(i);
+                top_a[ntop] = a;
+                ntop++;
+            } else {
+                int worst = 0;
+                for (int t = 1; t < 8; t++) {
+                    if (top_a[t] < top_a[worst]) {
+                        worst = t;
+                    }
+                }
+                if (a > top_a[worst]) {
+                    top_i[worst] = static_cast<int>(i);
+                    top_a[worst] = a;
+                }
+            }
         }
         const size_t finite = n - nan - inf;
         const double mean   = finite > 0 ? sum / static_cast<double>(finite) : 0.0;
-        LOG_INFO("%s %zu: n=%zu nan=%zu inf=%zu finite=%zu min=%g max=%g mean=%g",
+        std::string shape_s = "[";
+        for (size_t d = 0; d < shape.size(); d++) {
+            if (d) {
+                shape_s += ",";
+            }
+            shape_s += std::to_string(shape[d]);
+        }
+        shape_s += "]";
+        LOG_INFO("%s %zu: shape=%s n=%zu nan=%zu inf=%zu finite=%zu min=%g max=%g mean=%g abs>4=%zu abs>5=%zu",
                  tag,
                  index,
+                 shape_s.c_str(),
                  n,
                  nan,
                  inf,
                  finite,
                  mn,
                  mx,
-                 mean);
+                 mean,
+                 abs4,
+                 abs5);
+
+        const int64_t n0 = shape.size() > 0 ? shape[0] : 1;
+        const int64_t n1 = shape.size() > 1 ? shape[1] : 1;
+        const int64_t n2 = shape.size() > 2 ? shape[2] : 1;
+        if (n2 > 0 && n2 <= 16 && static_cast<int64_t>(n) == n0 * n1 * n2 * (shape.size() > 3 ? shape[3] : 1)) {
+            for (int64_t c = 0; c < n2; c++) {
+                float cmn = std::numeric_limits<float>::infinity();
+                float cmx = -std::numeric_limits<float>::infinity();
+                size_t chot = 0;
+                for (int64_t y = 0; y < n1; y++) {
+                    for (int64_t x = 0; x < n0; x++) {
+                        const size_t i = static_cast<size_t>((c * n1 + y) * n0 + x);
+                        if (i >= n) {
+                            continue;
+                        }
+                        const float v = vals[i];
+                        if (!std::isfinite(v)) {
+                            continue;
+                        }
+                        cmn = std::min(cmn, v);
+                        cmx = std::max(cmx, v);
+                        if (std::fabs(v) > 4.f) {
+                            chot++;
+                        }
+                    }
+                }
+                LOG_INFO("%s %zu ch%lld: min=%g max=%g abs>4=%zu", tag, index, static_cast<long long>(c), cmn, cmx, chot);
+            }
+        }
+        for (int t = 0; t < ntop; t++) {
+            const int i  = top_i[t];
+            const float v = vals[static_cast<size_t>(i)];
+            const int64_t x = n0 ? (i % n0) : 0;
+            const int64_t y = n0 ? ((i / n0) % n1) : 0;
+            const int64_t c = (n0 * n1) ? ((i / (n0 * n1)) % n2) : 0;
+            LOG_INFO("%s %zu peak: i=%d w=%lld h=%lld c=%lld v=%g",
+                     tag,
+                     index,
+                     i,
+                     static_cast<long long>(x),
+                     static_cast<long long>(y),
+                     static_cast<long long>(c),
+                     v);
+        }
+
+        if (std::strcmp(tag, "latent_post_sample") == 0) {
+            const char* dump = std::getenv("SD_DUMP_LATENT");
+            if (dump && dump[0]) {
+                FILE* f = std::fopen(dump, "wb");
+                if (f) {
+                    std::fwrite(vals.data(), sizeof(float), n, f);
+                    std::fclose(f);
+                    LOG_INFO("%s %zu: dumped %zu floats to %s", tag, index, n, dump);
+                }
+            }
+        }
     }
 
     struct CircularAxesState {

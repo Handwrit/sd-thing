@@ -5,6 +5,10 @@
 # GPU VAE decode produced white/speckled frames; decode on CPU.
 # --rng cpu matches ComfyUI noise (README); default cuda is WebUI RNG.
 # Do not pass --linear-scale 0.0078125 here: on SD 1.4 it produced all-white images.
+# Do not default HSA_OVERRIDE_GFX_VERSION=10.3.0: the card already reports
+# gfx1030, and forcing 10.3.0 produced latent spikes / RGB orbs vs native.
+# GPU_MAX_HW_QUEUES=1 reduced 5-step spikes; HIP results are not bit-stable
+# run-to-run, so a GPU fault or remaining race is still possible.
 
 set -euo pipefail
 
@@ -14,12 +18,13 @@ MODEL="${SD_MODEL:-${HOME}/ComfyUI/models/checkpoints/sd-v1-4.ckpt}"
 LORA_DIR="${SD_LORA_DIR:-${HOME}/ComfyUI/models/loras}"
 PORT="${SD_LISTEN_PORT:-1493}"
 
-export HSA_OVERRIDE_GFX_VERSION="${HSA_OVERRIDE_GFX_VERSION:-10.3.0}"
 export HIP_VISIBLE_DEVICES="${HIP_VISIBLE_DEVICES:-0}"
 export GGML_CUDA_DISABLE_GRAPHS="${GGML_CUDA_DISABLE_GRAPHS:-1}"
 # Async HIP launches page-faulted this gfx1030 card and produced Inf/white frames.
 export HIP_LAUNCH_BLOCKING="${HIP_LAUNCH_BLOCKING:-1}"
 export AMD_SERIALIZE_KERNEL="${AMD_SERIALIZE_KERNEL:-3}"
+export AMD_SERIALIZE_COPY="${AMD_SERIALIZE_COPY:-3}"
+export GPU_MAX_HW_QUEUES="${GPU_MAX_HW_QUEUES:-1}"
 
 exec "$BIN" \
   -m "$MODEL" \
