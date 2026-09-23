@@ -563,10 +563,9 @@ static void print_progress_line(int step, int steps, const std::string& speed_te
     fflush(stdout);  // for linux
 }
 
-void pretty_progress(int step, int steps, float time) {
-    if (sd_progress_cb) {
+void pretty_progress(int step, int steps, float time, bool notify_callback) {
+    if (notify_callback && sd_progress_cb) {
         sd_progress_cb(step, steps, time, sd_progress_cb_data);
-        return;
     }
     if (step == 0) {
         return;
@@ -581,11 +580,8 @@ void pretty_progress(int step, int steps, float time) {
 }
 
 void pretty_bytes_progress(int step, int steps, uint64_t bytes_processed, float elapsed_seconds) {
-    if (sd_progress_cb) {
-        float time = elapsed_seconds / (step + 1e-6f);
-        sd_progress_cb(step, steps, time, sd_progress_cb_data);
-        return;
-    }
+    // Tensor loads use the same printer as sampling. They are not sample steps,
+    // so they stay on the console and do not move the progress callback.
     if (step == 0) {
         return;
     }

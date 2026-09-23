@@ -55,6 +55,30 @@ static bool backend_supports_host_buffer(ggml_backend_t backend) {
     return props.caps.buffer_from_host_ptr;
 }
 
+static bool use_compute_host_buffer_for_cpu_params(ggml_backend_t compute_backend) {
+    if (compute_backend == nullptr) {
+        return false;
+    }
+    ggml_backend_dev_t dev = ggml_backend_get_device(compute_backend);
+    if (dev == nullptr) {
+        return false;
+    }
+    // Discrete Vulkan host buffers are GTT on RADV. GTT is also where command
+    // buffers come from, so pinning a 30GB+ offload set makes vkQueueSubmit fail
+    // with "Not enough memory for command submission" while dedicated VRAM still
+    // looks half empty in nvtop. iGPU/UMA and CUDA pinned host are fine.
+    if (ggml_backend_dev_type(dev) == GGML_BACKEND_DEVICE_TYPE_GPU &&
+        starts_with(SAFE_STR(ggml_backend_name(compute_backend)), "Vulkan")) {
+        static bool logged = false;
+        if (!logged) {
+            LOG_INFO("keeping offloaded weights on CPU for discrete Vulkan; RADV GTT host buffers starve command submission");
+            logged = true;
+        }
+        return false;
+    }
+    return ggml_backend_dev_host_buffer_type(dev) != nullptr;
+}
+
 static bool device_supports_param_op(ggml_backend_dev_t device,
                                      ggml_tensor* weight,
                                      enum ggml_op op,
@@ -989,7 +1013,7 @@ ggml_backend_buffer_type_t ModelManager::params_buffer_type_for(const TensorStat
     ggml_backend_buffer_type_t params_buft = nullptr;
     if (state.compute_backend != nullptr && state.params_backend != state.compute_backend) {
         ggml_backend_dev_t compute_dev = ggml_backend_get_device(state.compute_backend);
-        if (compute_dev != nullptr) {
+        if (compute_dev != nullptr && use_compute_host_buffer_for_cpu_params(state.compute_backend)) {
             params_buft = ggml_backend_dev_host_buffer_type(compute_dev);
         }
     } else if (state.params_backend == state.compute_backend) {

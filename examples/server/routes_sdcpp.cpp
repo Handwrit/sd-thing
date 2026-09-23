@@ -120,6 +120,7 @@ static json make_img_gen_defaults_json(const SDGenerationParams& defaults, const
     return {
         {"prompt", defaults.prompt},
         {"negative_prompt", defaults.negative_prompt},
+        {"nag_prompt", defaults.nag_prompt},
         {"clip_skip", defaults.clip_skip},
         {"width", defaults.width > 0 ? defaults.width : 512},
         {"height", defaults.height > 0 ? defaults.height : 512},
@@ -181,7 +182,7 @@ static json make_img_gen_features_json() {
         {"hires", true},
         {"cache", true},
         {"cancel_queued", true},
-        {"cancel_generating", false},
+        {"cancel_generating", true},
     };
 }
 
@@ -195,7 +196,7 @@ static json make_vid_gen_features_json() {
         {"vae_tiling", true},
         {"cache", true},
         {"cancel_queued", true},
-        {"cancel_generating", false},
+        {"cancel_generating", true},
     };
 }
 
@@ -307,7 +308,7 @@ static json make_capabilities_json(ServerRuntime& runtime) {
     json top_level_output_formats = json::array();
     json top_level_features       = {
               {"cancel_queued", true},
-              {"cancel_generating", false},
+              {"cancel_generating", true},
     };
     std::string current_mode = "";
     if (supports_img) {
@@ -435,27 +436,12 @@ void register_sdcpp_api_endpoints(httplib::Server& svr, ServerRuntime& rt) {
                 return;
             }
 
-            AsyncJobManager& manager                = *runtime->async_job_manager;
-            std::shared_ptr<AsyncGenerationJob> job = std::make_shared<AsyncGenerationJob>();
-            job->kind                               = AsyncJobKind::ImgGen;
-            job->status                             = AsyncJobStatus::Queued;
-            job->created_at                         = unix_timestamp_now();
-            job->img_gen                            = std::move(request);
-
-            {
-                std::lock_guard<std::mutex> lock(manager.mutex);
-                purge_expired_jobs(manager);
-                if (count_pending_jobs(manager) >= manager.max_pending_jobs) {
-                    res.status = 429;
-                    res.set_content(R"({"error":"job queue is full"})", "application/json");
-                    return;
-                }
-                job->id               = make_async_job_id(manager);
-                manager.jobs[job->id] = job;
-                manager.queue.push_back(job->id);
+            auto job = enqueue_img_gen_job(*runtime, std::move(request), false, error_message);
+            if (!job) {
+                res.status = error_message == "job queue is full" ? 429 : 500;
+                res.set_content(json({{"error", error_message}}).dump(), "application/json");
+                return;
             }
-
-            manager.cv.notify_one();
 
             json out;
             out["id"]       = job->id;
@@ -590,8 +576,9 @@ void register_sdcpp_api_endpoints(httplib::Server& svr, ServerRuntime& rt) {
         }
 
         if (job.status == AsyncJobStatus::Generating) {
-            res.status = 409;
-            res.set_content(R"({"error":"job is currently generating and cannot be interrupted yet"})", "application/json");
+            request_generation_interrupt(*runtime);
+            res.status = 200;
+            res.set_content(make_async_job_json(manager, job).dump(), "application/json");
             return;
         }
 

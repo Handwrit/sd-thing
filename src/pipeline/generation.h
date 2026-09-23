@@ -39,6 +39,7 @@ namespace sd::pipeline {
         SDCondition cond;
         SDCondition uncond;
         SDCondition img_uncond;
+        SDCondition nag;
     };
 
     struct ConditionerRunnerEndOnExit {

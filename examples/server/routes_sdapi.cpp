@@ -7,6 +7,7 @@
 #include <string_view>
 #include <unordered_map>
 
+#include "async_jobs.h"
 #include "common/common.h"
 #include "common/media_io.h"
 #include "common/resource_owners.hpp"
@@ -98,6 +99,8 @@ static bool build_sdapi_img_gen_request(const json& j,
                                         std::string& error_message) {
     std::string prompt          = j.value("prompt", "");
     std::string negative_prompt = j.value("negative_prompt", "");
+    const bool has_nag_prompt   = j.contains("nag_prompt") && j["nag_prompt"].is_string();
+    std::string nag_prompt      = has_nag_prompt ? j["nag_prompt"].get<std::string>() : "";
     int width                   = j.value("width", 512);
     int height                  = j.value("height", 512);
     int steps                   = j.value("steps", runtime.default_gen_params->sample_params.sample_steps);
@@ -122,6 +125,9 @@ static bool build_sdapi_img_gen_request(const json& j,
 
     request.gen_params.prompt                         = prompt;
     request.gen_params.negative_prompt                = negative_prompt;
+    if (has_nag_prompt) {
+        request.gen_params.nag_prompt = nag_prompt;
+    }
     request.gen_params.seed                           = seed;
     request.gen_params.sample_params.sample_steps     = steps;
     request.gen_params.batch_count                    = batch_size;
@@ -159,6 +165,9 @@ static bool build_sdapi_img_gen_request(const json& j,
     enum scheduler_t scheduler = str_to_scheduler(scheduler_name.c_str());
     if (scheduler != SCHEDULER_COUNT) {
         request.gen_params.sample_params.scheduler = scheduler;
+    }
+    if (j.contains("extra_sample_args") && j["extra_sample_args"].is_string()) {
+        request.gen_params.extra_sample_args = j["extra_sample_args"].get<std::string>();
     }
 
     if (j.contains("lora") && j["lora"].is_array()) {
@@ -271,6 +280,9 @@ static nlohmann::json prepare_info_field(const SDContextParams& ctx_params,
     if (!gen_params.negative_prompt.empty()) {
         jsoninfo["negative_prompt"] = gen_params.negative_prompt;
     }
+    if (!gen_params.nag_prompt.empty()) {
+        jsoninfo["nag_prompt"] = gen_params.nag_prompt;
+    }
     jsoninfo["seed"]         = gen_params.seed;
     jsoninfo["cfg_scale"]    = gen_params.sample_params.guidance.txt_cfg;
     jsoninfo["width"]        = gen_params.get_resolved_width();
@@ -309,6 +321,8 @@ void register_sdapi_endpoints(httplib::Server& svr, ServerRuntime& rt) {
     ServerRuntime* runtime = &rt;
 
     auto sdapi_any2img = [runtime](const httplib::Request& req, httplib::Response& res, bool img2img) {
+        std::string sync_id;
+        bool started = false;
         try {
             if (req.body.empty()) {
                 res.status = 400;
@@ -332,6 +346,14 @@ void register_sdapi_endpoints(httplib::Server& svr, ServerRuntime& rt) {
 
             LOG_VERBOSE("%s\n", request.gen_params.to_string().c_str());
 
+            sync_id = "sync_" + std::to_string(unix_timestamp_now());
+            begin_generation(*runtime,
+                             sync_id,
+                             img2img ? "img2img" : "txt2img",
+                             request.gen_params,
+                             img2img);
+            started = true;
+
             sd_img_gen_params_t img_gen_params = request.to_sd_img_gen_params_t();
             SDImageVec results;
             int num_results = 0;
@@ -347,15 +369,25 @@ void register_sdapi_endpoints(httplib::Server& svr, ServerRuntime& rt) {
             }
 
             if (results.empty()) {
+                const bool cancelled = consume_generation_interrupt(*runtime);
+                finish_generation(*runtime, sync_id, cancelled ? "cancelled" : "failed", request.gen_params.prompt, {});
+                if (cancelled) {
+                    res.status = 409;
+                    res.set_content(R"({"error":"cancelled"})", "application/json");
+                    return;
+                }
                 res.status = 500;
                 res.set_content(R"({"error":"generate_image returned no results"})", "application/json");
                 return;
             }
+            consume_generation_interrupt(*runtime);
 
             json out;
-            out["images"]     = json::array();
-            out["parameters"] = j;
-            json jsoninfo     = prepare_info_field(*runtime->ctx_params, request.gen_params, img2img);
+            out["images"]          = json::array();
+            out["parameters"]      = j;
+            const bool send_images = j.value("send_images", true);
+            json jsoninfo          = prepare_info_field(*runtime->ctx_params, request.gen_params, img2img);
+            json output_files      = json::array();
 
             int images_per_batch = request.gen_params.batch_count > 0 ? std::max(1, num_results / request.gen_params.batch_count) : 1;
             for (int i = 0; i < num_results; ++i) {
@@ -369,19 +401,26 @@ void register_sdapi_endpoints(httplib::Server& svr, ServerRuntime& rt) {
                                                       request.gen_params,
                                                       request.gen_params.seed + i / images_per_batch);
 
-                auto image_bytes = encode_image_to_vector(EncodedImageFormat::PNG,
-                                                          results[i].data,
-                                                          results[i].width,
-                                                          results[i].height,
-                                                          results[i].channel,
-                                                          embed_meta ? params : "");
+                if (send_images) {
+                    auto image_bytes = encode_image_to_vector(EncodedImageFormat::PNG,
+                                                              results[i].data,
+                                                              results[i].width,
+                                                              results[i].height,
+                                                              results[i].channel,
+                                                              embed_meta ? params : "");
 
-                if (image_bytes.empty()) {
-                    LOG_ERROR("write image to mem failed");
-                    continue;
+                    if (image_bytes.empty()) {
+                        LOG_ERROR("write image to mem failed");
+                        continue;
+                    }
+
+                    out["images"].push_back(base64_encode(image_bytes));
                 }
 
-                out["images"].push_back(base64_encode(image_bytes));
+                std::string saved_path = save_generated_image(*runtime, results[i], embed_meta ? params : "");
+                if (!saved_path.empty()) {
+                    output_files.push_back(saved_path);
+                }
 
                 jsoninfo["infotexts"][i]            = params;
                 jsoninfo["all_seeds"][i]            = request.gen_params.seed + i;
@@ -389,13 +428,25 @@ void register_sdapi_endpoints(httplib::Server& svr, ServerRuntime& rt) {
                 jsoninfo["all_negative_prompts"][i] = request.gen_params.negative_prompt;
             }
 
+            out["parameters"]["output_files"] = output_files;
+            out["output_files"]               = output_files;
+
             // not a mistake: it is supposed to be a string in json format
             out["info"] = jsoninfo.dump();
+
+            std::vector<std::string> saved_files;
+            for (const auto& path : output_files) {
+                saved_files.push_back(path.get<std::string>());
+            }
+            finish_generation(*runtime, sync_id, "completed", request.gen_params.prompt, saved_files);
 
             res.set_content(out.dump(), "application/json");
             res.status = 200;
 
         } catch (const std::exception& e) {
+            if (started) {
+                finish_generation(*runtime, sync_id, "failed", "", {});
+            }
             res.status = 500;
             json err;
             err["error"]   = "server_error";
@@ -531,5 +582,247 @@ void register_sdapi_endpoints(httplib::Server& svr, ServerRuntime& rt) {
         r["samples_format"]      = "png";
         r["sd_model_checkpoint"] = model_path.stem();
         res.set_content(r.dump(), "application/json");
+    });
+
+    svr.Get("/sdapi/v1/progress", [runtime](const httplib::Request&, httplib::Response& res) {
+        int step        = 0;
+        int steps       = 0;
+        bool has_preview = false;
+        bool busy        = false;
+        bool interrupted = runtime->interrupt_requested.load(std::memory_order_acquire);
+        std::string kind;
+        if (runtime->preview_state != nullptr) {
+            std::lock_guard<std::mutex> lock(runtime->preview_state->mutex);
+            step        = runtime->preview_state->step;
+            steps       = runtime->preview_state->steps;
+            has_preview = !runtime->preview_state->png.empty();
+        }
+        if (runtime->generation_status != nullptr) {
+            std::lock_guard<std::mutex> lock(runtime->generation_status->mutex);
+            busy = runtime->generation_status->busy;
+            kind = runtime->generation_status->kind;
+            if (steps <= 0) {
+                steps = runtime->generation_status->steps;
+            }
+        }
+        const float progress = (!busy || steps <= 0) ? 0.f : std::min(1.f, std::max(0.f, float(step) / float(steps)));
+        json textinfo        = nullptr;
+        if (busy) {
+            textinfo = std::to_string(step) + "/" + std::to_string(steps);
+        }
+        json state = {
+            {"skipped", false},
+            {"interrupted", interrupted},
+            {"job", kind},
+            {"job_count", busy ? 1 : 0},
+            {"job_timestamp", ""},
+            {"job_no", 0},
+            {"sampling_step", step},
+            {"sampling_steps", steps},
+        };
+        json out = {
+            {"progress", progress},
+            {"eta_relative", 0},
+            {"state", state},
+            {"current_image", nullptr},
+            {"has_preview", has_preview},
+            {"textinfo", textinfo},
+        };
+        res.set_header("Cache-Control", "no-store");
+        res.set_content(out.dump(), "application/json");
+    });
+
+    svr.Get("/sdapi/v1/queue", [runtime](const httplib::Request&, httplib::Response& res) {
+        json pending = json::array();
+        json running = nullptr;
+        if (runtime->async_job_manager != nullptr) {
+            AsyncJobManager& manager = *runtime->async_job_manager;
+            std::lock_guard<std::mutex> lock(manager.mutex);
+            purge_expired_jobs(manager);
+            size_t position = 1;
+            for (const auto& job_id : manager.queue) {
+                auto it = manager.jobs.find(job_id);
+                if (it == manager.jobs.end()) {
+                    continue;
+                }
+                pending.push_back(make_job_view(*it->second, static_cast<int>(position++)));
+            }
+            for (const auto& entry : manager.jobs) {
+                if (entry.second->status == AsyncJobStatus::Generating) {
+                    running = make_job_view(*entry.second, 0);
+                    break;
+                }
+            }
+        }
+
+        int step         = 0;
+        int steps        = 0;
+        bool has_preview = false;
+        if (runtime->preview_state != nullptr) {
+            std::lock_guard<std::mutex> lock(runtime->preview_state->mutex);
+            step        = runtime->preview_state->step;
+            steps       = runtime->preview_state->steps;
+            has_preview = !runtime->preview_state->png.empty();
+        }
+
+        json last_finished = nullptr;
+        if (runtime->generation_status != nullptr) {
+            std::lock_guard<std::mutex> lock(runtime->generation_status->mutex);
+            auto& st = *runtime->generation_status;
+            if (st.busy && running.is_null()) {
+                running = {
+                    {"id", st.job_id},
+                    {"status", "generating"},
+                    {"kind", st.kind},
+                    {"prompt", st.prompt},
+                    {"negative_prompt", st.negative_prompt},
+                    {"width", st.width},
+                    {"height", st.height},
+                    {"steps", st.steps},
+                    {"seed", st.seed},
+                    {"sampler", st.sampler},
+                    {"scheduler", st.scheduler},
+                    {"i2i", st.img2img},
+                    {"queue_position", 0},
+                };
+                if (steps <= 0) {
+                    steps = st.steps;
+                }
+            } else if (st.busy && !running.is_null() && steps <= 0) {
+                steps = st.steps;
+            }
+            if (!st.last_finished_id.empty()) {
+                last_finished = {
+                    {"id", st.last_finished_id},
+                    {"status", st.last_finished_status},
+                    {"prompt", st.last_finished_prompt},
+                    {"output_files", st.last_finished_files},
+                };
+            }
+        }
+
+        if (!running.is_null()) {
+            running["step"]  = step;
+            running["steps"] = steps;
+        }
+
+        json out = {
+            {"running", running},
+            {"pending", pending},
+            {"step", step},
+            {"steps", steps},
+            {"has_preview", has_preview},
+            {"last_finished", last_finished},
+        };
+        res.set_header("Cache-Control", "no-store");
+        res.set_content(out.dump(), "application/json");
+    });
+
+    svr.Post("/sdapi/v1/queue", [runtime](const httplib::Request& req, httplib::Response& res) {
+        try {
+            if (req.body.empty()) {
+                res.status = 400;
+                res.set_content(R"({"error":"empty body"})", "application/json");
+                return;
+            }
+            if (!runtime_supports_generation_mode(*runtime, IMG_GEN)) {
+                res.status = 400;
+                res.set_content(json({{"error", unsupported_generation_mode_error(IMG_GEN)}}).dump(), "application/json");
+                return;
+            }
+
+            json j              = json::parse(req.body);
+            const bool img2img  = j.value("i2i", false) || j.contains("init_images");
+            ImgGenJobRequest request;
+            std::string error_message;
+            if (!build_sdapi_img_gen_request(j, *runtime, img2img, request, error_message)) {
+                res.status = 400;
+                res.set_content(json({{"error", error_message}}).dump(), "application/json");
+                return;
+            }
+
+            auto job = enqueue_img_gen_job(*runtime, std::move(request), img2img, error_message);
+            if (!job) {
+                res.status = error_message == "job queue is full" ? 429 : 500;
+                res.set_content(json({{"error", error_message}}).dump(), "application/json");
+                return;
+            }
+
+            json out = make_job_view(*job, 0);
+            out["poll_url"] = "/sdcpp/v1/jobs/" + job->id;
+            res.status      = 202;
+            res.set_content(out.dump(), "application/json");
+        } catch (const json::parse_error& e) {
+            res.status = 400;
+            res.set_content(json({{"error", "invalid json"}, {"message", e.what()}}).dump(), "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json({{"error", "server_error"}, {"message", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    svr.Post("/sdapi/v1/queue/cancel", [runtime](const httplib::Request& req, httplib::Response& res) {
+        std::string job_id;
+        if (!req.body.empty()) {
+            try {
+                json body = json::parse(req.body);
+                if (body.contains("id") && body["id"].is_string()) {
+                    job_id = body["id"].get<std::string>();
+                }
+            } catch (const json::parse_error&) {
+                res.status = 400;
+                res.set_content(R"({"error":"invalid json"})", "application/json");
+                return;
+            }
+        }
+
+        if (job_id.empty()) {
+            request_generation_interrupt(*runtime);
+            res.status = 200;
+            res.set_content(R"({"cancelled":"running"})", "application/json");
+            return;
+        }
+
+        if (runtime->async_job_manager == nullptr) {
+            request_generation_interrupt(*runtime);
+            res.status = 200;
+            res.set_content(R"({"cancelled":"running"})", "application/json");
+            return;
+        }
+
+        AsyncJobManager& manager = *runtime->async_job_manager;
+        std::lock_guard<std::mutex> lock(manager.mutex);
+        purge_expired_jobs(manager);
+        auto it = manager.jobs.find(job_id);
+        if (it == manager.jobs.end()) {
+            request_generation_interrupt(*runtime);
+            res.status = 200;
+            res.set_content(R"({"cancelled":"running"})", "application/json");
+            return;
+        }
+
+        auto& job = *it->second;
+        if (job.status == AsyncJobStatus::Queued) {
+            if (!cancel_queued_job(manager, job)) {
+                res.status = 409;
+                res.set_content(R"({"error":"job queue state changed before cancellation"})", "application/json");
+                return;
+            }
+            res.status = 200;
+            res.set_content(make_job_view(job, 0).dump(), "application/json");
+            return;
+        }
+
+        if (job.status == AsyncJobStatus::Generating) {
+            request_generation_interrupt(*runtime);
+        }
+        res.status = 200;
+        res.set_content(make_job_view(job, 0).dump(), "application/json");
+    });
+
+    svr.Post("/sdapi/v1/interrupt", [runtime](const httplib::Request&, httplib::Response& res) {
+        request_generation_interrupt(*runtime);
+        res.status = 200;
+        res.set_content("{}", "application/json");
     });
 }

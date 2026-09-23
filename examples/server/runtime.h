@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <string>
@@ -17,10 +18,38 @@ struct ArgOptions;
 struct SDContextParams;
 struct AsyncJobManager;
 
+struct PreviewState {
+    std::mutex mutex;
+    std::vector<uint8_t> png;
+    int step  = 0;
+    int steps = 0;
+};
+
+struct GenerationStatus {
+    std::mutex mutex;
+    bool busy = false;
+    bool img2img = false;
+    std::string job_id;
+    std::string kind;
+    std::string prompt;
+    std::string negative_prompt;
+    int width  = 0;
+    int height = 0;
+    int steps  = 0;
+    int64_t seed = -1;
+    std::string sampler;
+    std::string scheduler;
+    std::string last_finished_id;
+    std::string last_finished_status;
+    std::string last_finished_prompt;
+    std::vector<std::string> last_finished_files;
+};
+
 struct SDSvrParams {
     std::string listen_ip = "127.0.0.1";
     int listen_port       = 1234;
     std::string serve_html_path;
+    std::string output_dir;
     bool normal_exit = false;
     sd_log_level_t log_level = SD_LOG_INFO;
     bool color       = false;
@@ -56,6 +85,9 @@ struct ServerRuntime {
     std::vector<UpscalerEntry>* upscaler_cache;
     std::mutex* upscaler_mutex;
     AsyncJobManager* async_job_manager;
+    PreviewState* preview_state = nullptr;
+    GenerationStatus* generation_status = nullptr;
+    std::atomic<bool> interrupt_requested{false};
 };
 
 struct ImgGenJobRequest {
@@ -98,3 +130,20 @@ void refresh_lora_cache(ServerRuntime& rt);
 std::string get_lora_full_path(ServerRuntime& rt, const std::string& path);
 void refresh_upscaler_cache(ServerRuntime& rt);
 int64_t unix_timestamp_now();
+void server_preview_callback(int step, int frame_count, sd_image_t* frames, bool is_noisy, void* data);
+void server_progress_callback(int step, int steps, float time, void* data);
+void begin_generation(ServerRuntime& runtime,
+                      const std::string& job_id,
+                      const char* kind,
+                      const SDGenerationParams& params,
+                      bool img2img);
+void finish_generation(ServerRuntime& runtime,
+                       const std::string& job_id,
+                       const std::string& status,
+                       const std::string& prompt,
+                       const std::vector<std::string>& output_files);
+void request_generation_interrupt(ServerRuntime& runtime);
+bool consume_generation_interrupt(ServerRuntime& runtime);
+std::string save_generated_image(const ServerRuntime& runtime,
+                                 const sd_image_t& image,
+                                 const std::string& metadata);

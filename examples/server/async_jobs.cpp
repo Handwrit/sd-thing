@@ -96,6 +96,7 @@ bool cancel_queued_job(AsyncJobManager& manager, AsyncGenerationJob& job) {
     job.status       = AsyncJobStatus::Cancelled;
     job.completed_at = unix_timestamp_now();
     job.result_images_b64.clear();
+    job.result_output_files.clear();
     job.result_media_b64.clear();
     job.result_media_mime_type.clear();
     job.result_frame_count = 0;
@@ -143,6 +144,7 @@ json make_async_job_json(const AsyncJobManager& manager, const AsyncGenerationJo
             result["result"] = {
                 {"output_format", job.img_gen.output_format},
                 {"images", images},
+                {"output_files", job.result_output_files},
             };
         }
         result["error"] = nullptr;
@@ -162,6 +164,67 @@ json make_async_job_json(const AsyncJobManager& manager, const AsyncGenerationJo
     }
 
     return result;
+}
+
+json make_job_view(const AsyncGenerationJob& job, int queue_position) {
+    const SDGenerationParams& params = job.kind == AsyncJobKind::VidGen
+                                           ? job.vid_gen.gen_params
+                                           : job.img_gen.gen_params;
+    const char* sampler = sd_sample_method_name(params.sample_params.sample_method);
+    const char* sched   = sd_scheduler_name(params.sample_params.scheduler);
+    const char* kind    = job.kind == AsyncJobKind::VidGen
+                              ? "vid_gen"
+                              : (job.img2img ? "img2img" : "txt2img");
+    json view;
+    view["id"]              = job.id;
+    view["status"]          = async_job_status_name(job.status);
+    view["kind"]            = kind;
+    view["prompt"]          = params.prompt;
+    view["negative_prompt"] = params.negative_prompt;
+    view["nag_prompt"]      = params.nag_prompt;
+    view["width"]           = params.get_resolved_width();
+    view["height"]          = params.get_resolved_height();
+    view["steps"]           = params.sample_params.sample_steps;
+    view["seed"]            = params.seed;
+    view["sampler"]         = sampler != nullptr ? sampler : "default";
+    view["scheduler"]       = sched != nullptr ? sched : "default";
+    view["i2i"]             = job.img2img;
+    view["queue_position"]  = queue_position;
+    if (job.status == AsyncJobStatus::Completed) {
+        view["output_files"] = job.result_output_files;
+    }
+    return view;
+}
+
+std::shared_ptr<AsyncGenerationJob> enqueue_img_gen_job(ServerRuntime& runtime,
+                                                        ImgGenJobRequest request,
+                                                        bool img2img,
+                                                        std::string& error_message) {
+    if (runtime.async_job_manager == nullptr) {
+        error_message = "job queue is unavailable";
+        return nullptr;
+    }
+    AsyncJobManager& manager                = *runtime.async_job_manager;
+    std::shared_ptr<AsyncGenerationJob> job = std::make_shared<AsyncGenerationJob>();
+    job->kind                               = AsyncJobKind::ImgGen;
+    job->status                             = AsyncJobStatus::Queued;
+    job->created_at                         = unix_timestamp_now();
+    job->img_gen                            = std::move(request);
+    job->img2img                            = img2img;
+
+    {
+        std::lock_guard<std::mutex> lock(manager.mutex);
+        purge_expired_jobs(manager);
+        if (count_pending_jobs(manager) >= manager.max_pending_jobs) {
+            error_message = "job queue is full";
+            return nullptr;
+        }
+        job->id               = make_async_job_id(manager);
+        manager.jobs[job->id] = job;
+        manager.queue.push_back(job->id);
+    }
+    manager.cv.notify_one();
+    return job;
 }
 
 bool execute_img_gen_job(ServerRuntime& runtime,
@@ -185,9 +248,15 @@ bool execute_img_gen_job(ServerRuntime& runtime,
 
     const int num_results = results.count();
     if (num_results <= 0) {
-        error_message = "generate_image returned no results";
+        if (consume_generation_interrupt(runtime)) {
+            error_message = "cancelled";
+        } else {
+            error_message = "generate_image returned no results";
+        }
         return false;
     }
+
+    job.result_output_files.clear();
 
     EncodedImageFormat encoded_format = EncodedImageFormat::PNG;
     if (job.img_gen.output_format == "jpeg") {
@@ -219,6 +288,10 @@ bool execute_img_gen_job(ServerRuntime& runtime,
             continue;
         }
         output_images.push_back(base64_encode(image_bytes));
+        std::string saved_path = save_generated_image(runtime, results[i], metadata);
+        if (!saved_path.empty()) {
+            job.result_output_files.push_back(saved_path);
+        }
     }
 
     if (output_images.empty()) {
@@ -257,7 +330,11 @@ bool execute_vid_gen_job(ServerRuntime& runtime,
     num_results = results.count();
     if (num_results <= 0) {
         free_sd_audio(generated_audio);
-        error_message = "generate_video returned no results";
+        if (consume_generation_interrupt(runtime)) {
+            error_message = "cancelled";
+        } else {
+            error_message = "generate_video returned no results";
+        }
         return false;
     }
 
@@ -311,6 +388,14 @@ void async_job_worker(ServerRuntime& runtime) {
             job->started_at = unix_timestamp_now();
         }
 
+        const SDGenerationParams& gen_params = job->kind == AsyncJobKind::VidGen
+                                                   ? job->vid_gen.gen_params
+                                                   : job->img_gen.gen_params;
+        const char* kind = job->kind == AsyncJobKind::VidGen
+                               ? "vid_gen"
+                               : (job->img2img ? "img2img" : "txt2img");
+        begin_generation(runtime, job->id, kind, gen_params, job->img2img);
+
         std::vector<std::string> output_images;
         std::string output_media_b64;
         std::string output_media_mime_type;
@@ -337,11 +422,13 @@ void async_job_worker(ServerRuntime& runtime) {
             std::lock_guard<std::mutex> lock(manager.mutex);
             auto it = manager.jobs.find(job->id);
             if (it == manager.jobs.end()) {
+                finish_generation(runtime, job->id, "failed", "", {});
                 continue;
             }
 
             job->completed_at = unix_timestamp_now();
             if (ok) {
+                consume_generation_interrupt(runtime);
                 job->status                 = AsyncJobStatus::Completed;
                 job->result_images_b64      = std::move(output_images);
                 job->result_media_b64       = std::move(output_media_b64);
@@ -350,11 +437,23 @@ void async_job_worker(ServerRuntime& runtime) {
                 job->result_fps             = output_fps;
                 job->error_code.clear();
                 job->error_message.clear();
+            } else if (error_message == "cancelled") {
+                job->status        = AsyncJobStatus::Cancelled;
+                job->error_code    = "cancelled";
+                job->error_message = "job cancelled by client";
+                job->result_images_b64.clear();
+                job->result_output_files.clear();
+                job->result_media_b64.clear();
+                job->result_media_mime_type.clear();
+                job->result_frame_count = 0;
+                job->result_fps         = 0;
             } else {
+                consume_generation_interrupt(runtime);
                 job->status        = AsyncJobStatus::Failed;
                 job->error_code    = "generation_failed";
                 job->error_message = error_message.empty() ? "unknown generation error" : error_message;
                 job->result_images_b64.clear();
+                job->result_output_files.clear();
                 job->result_media_b64.clear();
                 job->result_media_mime_type.clear();
                 job->result_frame_count = 0;
@@ -363,5 +462,15 @@ void async_job_worker(ServerRuntime& runtime) {
 
             purge_expired_jobs(manager);
         }
+
+        const std::string finished_status = ok
+                                                ? "completed"
+                                                : (error_message == "cancelled" ? "cancelled" : "failed");
+        finish_generation(runtime,
+                          job->id,
+                          finished_status,
+                          job->kind == AsyncJobKind::VidGen ? job->vid_gen.gen_params.prompt
+                                                            : job->img_gen.gen_params.prompt,
+                          job->result_output_files);
     }
 }

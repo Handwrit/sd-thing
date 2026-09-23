@@ -15,6 +15,7 @@ VAE="${SD_VAE:-${HOME}/ComfyUI/models/vae/qwen_image_vae.safetensors}"
 LLM="${SD_LLM:-${HOME}/ComfyUI/models/text_encoders/qwen_3_06b_base.safetensors}"
 LORA_DIR="${SD_LORA_DIR:-${HOME}/ComfyUI/models/loras}"
 PORT="${SD_LISTEN_PORT:-1493}"
+OUTPUT_DIR="${SD_OUTPUT_DIR:-${ROOT}/output}"
 
 exec "$BIN" \
   --diffusion-model "$DIFFUSION" \
@@ -22,6 +23,8 @@ exec "$BIN" \
   --llm "$LLM" \
   --listen-port "$PORT" \
   --lora-model-dir "$LORA_DIR" \
+  --output-dir "$OUTPUT_DIR" \
+  --serve-html-path "${ROOT}/index.html" \
   --rng cpu \
   --vae-on-cpu \
   --diffusion-fa \

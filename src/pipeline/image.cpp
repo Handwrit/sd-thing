@@ -14,6 +14,7 @@
 #include "model/vae/vae.hpp"
 #include "request.h"
 #include "runtime/denoiser.hpp"
+#include "runtime/guidance.h"
 #include "upscaler.h"
 
 namespace sd::pipeline {
@@ -586,6 +587,26 @@ namespace sd::pipeline {
             cond.c_concat = latents->concat_latent;  // TODO: optimize
         }
 
+        SDCondition nag;
+        const sd::guidance::NormalizedAttentionGuidanceParams nag_params =
+            sd::guidance::parse_normalized_attention_guidance_args(plan->extra_sample_args);
+        if (nag_params.enabled()) {
+            if (sd->version != VERSION_FLUX2) {
+                LOG_WARN("NAG is only supported for Flux.2 dev, skipping");
+            } else if (request->nag_prompt.empty()) {
+                LOG_INFO("NAG scale %.2f ignored because nag_prompt is empty", nag_params.scale);
+            } else {
+                condition_params.text            = request->nag_prompt;
+                condition_params.zero_out_masked = false;
+                nag                              = sd->cond_stage_model->get_learned_condition(sd->n_threads,
+                                                                                               condition_params);
+                if (nag.empty()) {
+                    LOG_ERROR("failed to encode NAG prompt");
+                    return std::nullopt;
+                }
+            }
+        }
+
         bool use_ref_latent_img_cfg = request->use_img_uncond &&
                                       !latents->ref_images.empty() &&
                                       sd_version_supports_ref_latent_img_cfg(sd->version);
@@ -659,6 +680,7 @@ namespace sd::pipeline {
         embeds.img_uncond = std::move(img_uncond);
         embeds.cond       = std::move(cond);
         embeds.uncond     = std::move(uncond);
+        embeds.nag        = std::move(nag);
 
         return embeds;
     }
@@ -980,7 +1002,7 @@ namespace sd::pipeline {
         for (int b = 0; b < request.batch_count; b++) {
             sd_cancel_mode_t cancel = sd->get_cancel_flag();
             if (cancel == SD_CANCEL_ALL) {
-                LOG_ERROR("cancelling generation");
+                LOG_INFO("generation canceled");
                 return false;
             }
             if (cancel == SD_CANCEL_NEW_LATENTS) {
@@ -1022,7 +1044,9 @@ namespace sd::pipeline {
                                                0,
                                                static_cast<float>(request.fps),
                                                request.cache_params,
-                                               true);
+                                               true,
+                                               {},
+                                               embeds.nag.c_crossattn.empty() ? nullptr : &embeds.nag);
             int64_t sampling_end  = ggml_time_ms();
             if (!x_0.empty()) {
                 LOG_INFO("sampling completed, taking %.2fs", (sampling_end - sampling_start) * 1.0f / 1000);
@@ -1031,6 +1055,13 @@ namespace sd::pipeline {
                 continue;
             }
 
+            if (sd->get_cancel_flag() == SD_CANCEL_ALL) {
+                LOG_INFO("sampling for image %d/%d canceled after %.2fs",
+                         b + 1,
+                         request.batch_count,
+                         (sampling_end - sampling_start) * 1.0f / 1000);
+                return false;
+            }
             LOG_ERROR("sampling for image %d/%d failed after %.2fs",
                       b + 1,
                       request.batch_count,
@@ -1145,7 +1176,9 @@ namespace sd::pipeline {
                                                         0,
                                                         static_cast<float>(request.fps),
                                                         request.cache_params,
-                                                        false);
+                                                        false,
+                                                        {},
+                                                        embeds.nag.c_crossattn.empty() ? nullptr : &embeds.nag);
                 int64_t hires_sample_end   = ggml_time_ms();
                 if (!x_0.empty()) {
                     LOG_INFO("hires sampling %d/%d completed, taking %.2fs",

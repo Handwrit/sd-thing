@@ -466,8 +466,8 @@ namespace Hunyuan {
                 auto block = std::dynamic_pointer_cast<Flux::DoubleStreamBlock>(blocks["double_blocks." + std::to_string(i)]);
 
                 auto img_txt = block->forward(ctx, img, txt, vec, pe, nullptr);
-                img          = img_txt.first;   // [N, n_img_token, hidden_size]
-                txt          = img_txt.second;  // [N, n_txt_token, hidden_size]
+                img          = img_txt.img;  // [N, n_img_token, hidden_size]
+                txt          = img_txt.txt;  // [N, n_txt_token, hidden_size]
             }
 
             if (config.depth_single_blocks > 0) {

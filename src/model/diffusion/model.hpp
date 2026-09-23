@@ -55,10 +55,14 @@ struct SkipLayerDiffusionExtra {
 };
 
 struct FluxDiffusionExtra {
-    const sd::Tensor<float>* guidance   = nullptr;
-    const std::vector<int>* skip_layers = nullptr;
-    const sd::Tensor<float>* pulid_id   = nullptr;
-    float pulid_id_weight               = 1.0f;
+    const sd::Tensor<float>* guidance    = nullptr;
+    const std::vector<int>* skip_layers  = nullptr;
+    const sd::Tensor<float>* pulid_id    = nullptr;
+    float pulid_id_weight                = 1.0f;
+    const sd::Tensor<float>* nag_context = nullptr;
+    float nag_scale                      = 1.0f;
+    float nag_tau                        = 2.5f;
+    float nag_alpha                      = 0.25f;
 };
 
 struct AnimaDiffusionExtra {

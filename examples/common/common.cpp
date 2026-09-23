@@ -1034,6 +1034,11 @@ ArgOptions SDGenerationParams::get_options() {
          0,
          &negative_prompt},
         {"",
+         "--nag-prompt",
+         "Flux.2 dev Normalized Attention Guidance prompt (default: \"\"). Independent of --negative-prompt; empty disables NAG",
+         0,
+         &nag_prompt},
+        {"",
          "--ad-model",
          "path to a converted YOLOv8 detection model for ADetailer",
          0,
@@ -1109,7 +1114,7 @@ ArgOptions SDGenerationParams::get_options() {
          &hires_upscaler},
         {"",
          "--extra-sample-args",
-         "extra sampler/scheduler/guidance args, key=value list. CFG supports guidance_schedule; APG supports apg_eta, apg_momentum, apg_norm_threshold, apg_norm_threshold_smoothing; SLG supports slg_uncond; lcm supports noise_clip_std, noise_scale_start, noise_scale_end; flux supports base_shift, max_shift; ltx2 supports max_shift, base_shift, stretch, terminal; euler_ge supports gamma; beta scheduler supports alpha, beta; logit_normal supports mu, std, logsnr_min, logsnr_max, resolution_aware; lms supports lms_max_order, lms_shift, lms_divisions; noise-injecting samplers support noise_sampler with value iid (default except for dpm++2m_sde_bt) or brownian_tree; brownian_tree_rng supports cpu (default), cuda, std_default or sampler_rng",
+         "extra sampler/scheduler/guidance args, key=value list. CFG supports guidance_schedule; APG supports apg_eta, apg_momentum, apg_norm_threshold, apg_norm_threshold_smoothing; SLG supports slg_uncond; Flux.2 dev NAG supports nag_scale, nag_tau, nag_alpha, nag_sigma_end, nag_sigma_start (the NAG text is --nag-prompt); lcm supports noise_clip_std, noise_scale_start, noise_scale_end; flux supports base_shift, max_shift; ltx2 supports max_shift, base_shift, stretch, terminal; euler_ge supports gamma; beta scheduler supports alpha, beta; logit_normal supports mu, std, logsnr_min, logsnr_max, resolution_aware; lms supports lms_max_order, lms_shift, lms_divisions; noise-injecting samplers support noise_sampler with value iid (default except for dpm++2m_sde_bt) or brownian_tree; brownian_tree_rng supports cpu (default), cuda, std_default or sampler_rng",
          (int)',',
          &extra_sample_args},
         {"",
@@ -2041,6 +2046,7 @@ bool SDGenerationParams::from_json_str(
 
     load_if_exists("prompt", prompt);
     load_if_exists("negative_prompt", negative_prompt);
+    load_if_exists("nag_prompt", nag_prompt);
     load_if_exists("ad_model", ad_model_path);
     load_if_exists("ad_prompt", ad_prompt);
     load_if_exists("ad_negative_prompt", ad_negative_prompt);
@@ -2673,6 +2679,7 @@ sd_img_gen_params_t SDGenerationParams::to_sd_img_gen_params_t() {
     params.lora_count          = static_cast<uint32_t>(lora_vec.size());
     params.prompt              = prompt.c_str();
     params.negative_prompt     = negative_prompt.c_str();
+    params.nag_prompt          = nag_prompt.c_str();
     params.clip_skip           = clip_skip;
     params.init_image          = init_image.get();
     params.ref_images          = ref_image_views.empty() ? nullptr : ref_image_views.data();
@@ -2848,6 +2855,7 @@ std::string SDGenerationParams::to_string() const {
         << "  high_noise_loras: \"" << high_noise_loras_str << "\",\n"
         << "  prompt: \"" << prompt << "\",\n"
         << "  negative_prompt: \"" << negative_prompt << "\",\n"
+        << "  nag_prompt: \"" << nag_prompt << "\",\n"
         << "  ad_model_path: \"" << ad_model_path << "\",\n"
         << "  ad_prompt: \"" << ad_prompt << "\",\n"
         << "  ad_negative_prompt: \"" << ad_negative_prompt << "\",\n"
@@ -2989,6 +2997,9 @@ std::string build_sdcpp_image_metadata_json(const SDContextParams& ctx_params,
         {"positive", gen_params.prompt},
         {"negative", gen_params.negative_prompt},
     };
+    if (!gen_params.nag_prompt.empty()) {
+        root["prompt"]["nag"] = gen_params.nag_prompt;
+    }
     if (!gen_params.ad_model_path.empty()) {
         root["adetailer"] = {
             {"model", sd_basename(gen_params.ad_model_path)},
@@ -3134,6 +3145,9 @@ std::string get_image_params(const SDContextParams& ctx_params,
     }
     if (gen_params.negative_prompt.size() != 0) {
         parameter_string += "Negative prompt: " + gen_params.negative_prompt + "\n";
+    }
+    if (!gen_params.nag_prompt.empty()) {
+        parameter_string += "NAG prompt: " + gen_params.nag_prompt + "\n";
     }
     parameter_string += "Steps: " + std::to_string(gen_params.sample_params.sample_steps) + ", ";
     parameter_string += "CFG scale: " + std::to_string(gen_params.sample_params.guidance.txt_cfg) + ", ";

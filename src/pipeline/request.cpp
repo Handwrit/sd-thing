@@ -131,6 +131,7 @@ namespace sd::pipeline {
     GenerationRequest::GenerationRequest(StableDiffusionGGML* sd, const sd_img_gen_params_t* sd_img_gen_params) {
         prompt                      = SAFE_STR(sd_img_gen_params->prompt);
         negative_prompt             = SAFE_STR(sd_img_gen_params->negative_prompt);
+        nag_prompt                  = SAFE_STR(sd_img_gen_params->nag_prompt);
         width                       = sd_img_gen_params->width;
         height                      = sd_img_gen_params->height;
         vae_scale_factor            = sd->get_vae_scale_factor();

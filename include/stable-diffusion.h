@@ -79,6 +79,7 @@ enum scheduler_t {
     FLUX2_SCHEDULER,
     FLUX_SCHEDULER,
     BETA_SCHEDULER,
+    TANGENT_SCHEDULER,
     SCHEDULER_COUNT
 };
 
@@ -408,6 +409,7 @@ typedef struct {
     int qwen_image_layers;
     bool circular_x;
     bool circular_y;
+    const char* nag_prompt;
 } sd_img_gen_params_t;
 
 typedef struct {

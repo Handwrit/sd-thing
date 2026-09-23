@@ -201,7 +201,7 @@ sd::Tensor<float> process_tiles_2d(const sd::Tensor<float>& input,
         LOG_VERBOSE("num tiles : %d, %d ", num_tiles_x, num_tiles_y);
         LOG_VERBOSE("optimal overlap : %f, %f (targeting %f)", tile_overlap_factor_x, tile_overlap_factor_y, tile_overlap_factor);
         LOG_VERBOSE("processing %i tiles", num_tiles);
-        pretty_progress(0, num_tiles, 0.0f);
+        pretty_progress(0, num_tiles, 0.0f, false);
     }
     for (int y = 0; y < small_height && !last_y; y += non_tile_overlap_y) {
         int dy = 0;
@@ -252,14 +252,14 @@ sd::Tensor<float> process_tiles_2d(const sd::Tensor<float>& input,
             if (!silent) {
                 int64_t t2 = ggml_time_ms();
                 last_time  = (t2 - t1) / 1000.0f;
-                pretty_progress(tile_count, num_tiles, last_time);
+                pretty_progress(tile_count, num_tiles, last_time, false);
             }
             tile_count++;
         }
         last_x = false;
     }
     if (!silent && tile_count < num_tiles) {
-        pretty_progress(num_tiles, num_tiles, last_time);
+        pretty_progress(num_tiles, num_tiles, last_time, false);
     }
     if (output.empty()) {
         return {};

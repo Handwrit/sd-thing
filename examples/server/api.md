@@ -37,6 +37,10 @@ Current generation-related endpoints include:
 
 - `POST /sdapi/v1/txt2img`
 - `POST /sdapi/v1/img2img`
+- `GET /sdapi/v1/progress`
+- `GET /sdapi/v1/queue`
+- `POST /sdapi/v1/queue`
+- `POST /sdapi/v1/queue/cancel`
 - `GET /sdapi/v1/loras`
 - `GET /sdapi/v1/upscalers`
 - `GET /sdapi/v1/latent-upscale-modes`
@@ -206,7 +210,9 @@ Currently supported request fields:
 | Field | Type | Notes |
 | --- | --- | --- |
 | `prompt` | `string` | Required |
-| `negative_prompt` | `string` | Optional |
+| `negative_prompt` | `string` | Optional CFG unconditional text |
+| `nag_prompt` | `string` | Optional Flux.2 dev Normalized Attention Guidance text. Empty leaves NAG off. Independent of `negative_prompt` |
+| `extra_sample_args` | `string` | Optional comma-separated `key=value` list. Flux.2 dev NAG keys are `nag_scale` (above `1` enables it; default `1`), `nag_tau` (default `2.5`), `nag_alpha` (default `0.25`), `nag_sigma_end` (default `0.75`), and `nag_sigma_start` (default `1000`) |
 | `width` | `integer` | Positive image width |
 | `height` | `integer` | Positive image height |
 | `steps` | `integer` | Sampling steps |
@@ -338,9 +344,44 @@ Built-in latent modes include `Latent`, `Latent (nearest)`, `Latent (nearest-exa
 | `samples_format` | `string` | Currently fixed to `png` |
 | `sd_model_checkpoint` | `string` | Model stem |
 
+#### `GET /sdapi/v1/progress`
+
+Current sampling progress for whatever is on the GPU, including a job started by another client.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `progress` | `number` | `0`–`1` from `sampling_step / sampling_steps` |
+| `state.sampling_step` | `integer` | Latest progress-callback step |
+| `state.sampling_steps` | `integer` | Requested step count |
+| `state.job` | `string` | `txt2img`, `img2img`, or empty when idle |
+| `has_preview` | `boolean` | `GET /preview.png` currently has a frame |
+| `current_image` | `null` | Not inlined; fetch `/preview.png` |
+| `textinfo` | `string` or `null` | `"step/steps"` while busy |
+
+#### `GET /sdapi/v1/queue`
+
+Server-side queue used by the local studio page. Safe to poll after a reload.
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `running` | `object` or `null` | Active job: `id`, `prompt`, `steps`, `step`, `seed`, `i2i`, … |
+| `pending` | `array<object>` | Queued jobs, front first |
+| `step` / `steps` | `integer` | Same counters as `/sdapi/v1/progress` |
+| `has_preview` | `boolean` | Preview PNG is available |
+| `last_finished` | `object` or `null` | Latest completed/cancelled/failed job and `output_files` |
+
+#### `POST /sdapi/v1/queue`
+
+Same body as `txt2img` / `img2img` (set `i2i` or pass `init_images` for img2img). Returns `202` with a job `id` immediately. The blocking `POST /sdapi/v1/txt2img` path is unchanged.
+
+#### `POST /sdapi/v1/queue/cancel`
+
+JSON `{ "id": "<job id>" }`. Cancels a queued job, or interrupts the running job. Omit `id` to interrupt whatever is generating.
+
 ### Notes
 
-- `sdapi` is synchronous from the HTTP client's perspective.
+- `POST /sdapi/v1/txt2img` and `img2img` remain synchronous from that HTTP client's perspective.
+- `POST /sdapi/v1/queue` is async and is what the studio page uses so a reload can attach mid-generation.
 - Prompt-embedded `<lora:...>` tags are intentionally unsupported.
 
 ## sdcpp API
@@ -754,6 +795,7 @@ Top-level scalar fields:
 | --- | --- |
 | `prompt` | `string` |
 | `negative_prompt` | `string` |
+| `nag_prompt` | `string` |
 | `clip_skip` | `integer` |
 | `width` | `integer` |
 | `height` | `integer` |
@@ -802,6 +844,9 @@ Sampling fields:
 | `sample_params.guidance.slg.layer_start` | `number` |
 | `sample_params.guidance.slg.layer_end` | `number` |
 | `sample_params.guidance.slg.scale` | `number` |
+| `sample_params.extra_sample_args` | `string` |
+
+`nag_prompt` is the Flux.2 dev Normalized Attention Guidance text and is independent of `negative_prompt`. An empty `nag_prompt` leaves NAG off. The numeric controls go in `sample_params.extra_sample_args`: `nag_scale` (above `1` enables it; default `1`), `nag_tau` (default `2.5`), `nag_alpha` (default `0.25`), `nag_sigma_end` (default `0.75`), and `nag_sigma_start` (default `1000`).
 
 Other native fields:
 

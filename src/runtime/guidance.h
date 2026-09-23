@@ -30,6 +30,25 @@ namespace sd::guidance {
     bool parse_skip_layer_guidance_uncond_arg(const char* extra_sample_args);
     std::vector<float> parse_guidance_schedule(const char* extra_sample_args);
 
+    // ComfyUI nag_scale is the paper's phi plus one. Scale 1 leaves attention unchanged.
+    struct NormalizedAttentionGuidanceParams {
+        float scale       = 1.f;
+        float tau         = 2.5f;
+        float alpha       = 0.25f;
+        float sigma_end   = 0.75f;
+        float sigma_start = 1000.f;
+
+        bool enabled() const {
+            return scale > 1.f;
+        }
+
+        bool active_at_sigma(float sigma) const {
+            return enabled() && sigma >= sigma_end && sigma <= sigma_start;
+        }
+    };
+
+    NormalizedAttentionGuidanceParams parse_normalized_attention_guidance_args(const char* extra_sample_args);
+
     struct GuidanceInput {
         int step                                 = 0;
         size_t schedule_size                     = 0;

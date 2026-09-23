@@ -23,6 +23,7 @@ namespace sd::pipeline {
     struct GenerationRequest {
         std::string prompt;
         std::string negative_prompt;
+        std::string nag_prompt;
         int width                                = -1;
         int height                               = -1;
         int clip_skip                            = -1;

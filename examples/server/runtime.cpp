@@ -4,13 +4,16 @@
 #include <cctype>
 #include <chrono>
 #include <cstdlib>
+#include <ctime>
 #include <filesystem>
 #include <mutex>
 #include <regex>
 #include <sstream>
+#include <system_error>
 
 #include "common/common.h"
 #include "common/log.h"
+#include "common/media_io.h"
 
 namespace fs = std::filesystem;
 
@@ -192,6 +195,7 @@ ArgOptions SDSvrParams::get_options() {
     options.string_options = {
         {"-l", "--listen-ip", "server listen ip (default: 127.0.0.1)", 0, &listen_ip},
         {"", "--serve-html-path", "path to HTML file to serve at root (optional)", 0, &serve_html_path},
+        {"", "--output-dir", "directory to save generated PNGs as YYYYMMDDHHMMSS_<model>.png (optional)", 0, &output_dir},
     };
 
     options.int_options = {
@@ -247,6 +251,7 @@ std::string SDSvrParams::to_string() const {
         << "  listen_ip: " << listen_ip << ",\n"
         << "  listen_port: \"" << listen_port << "\",\n"
         << "  serve_html_path: \"" << serve_html_path << "\",\n"
+        << "  output_dir: \"" << output_dir << "\",\n"
         << "}";
     return oss.str();
 }
@@ -331,4 +336,201 @@ int64_t unix_timestamp_now() {
     return std::chrono::duration_cast<std::chrono::seconds>(
                std::chrono::system_clock::now().time_since_epoch())
         .count();
+}
+
+static std::string sanitize_output_stem(const std::string& stem) {
+    std::string out;
+    out.reserve(stem.size());
+    bool last_us = false;
+    for (unsigned char c : stem) {
+        if (std::isalnum(c) || c == '.' || c == '_' || c == '-') {
+            out.push_back(static_cast<char>(c));
+            last_us = false;
+        } else if (!out.empty() && !last_us) {
+            out.push_back('_');
+            last_us = true;
+        }
+    }
+    while (!out.empty() && (out.front() == '.' || out.front() == '_')) {
+        out.erase(out.begin());
+    }
+    while (!out.empty() && out.back() == '_') {
+        out.pop_back();
+    }
+    if (out.empty()) {
+        return "model";
+    }
+    return out;
+}
+
+static std::string output_model_stem(const ServerRuntime& runtime) {
+    if (runtime.ctx_params == nullptr) {
+        return "model";
+    }
+    const auto& ctx = *runtime.ctx_params;
+    fs::path model_path;
+    if (!ctx.model_path.empty()) {
+        model_path = ctx.model_path;
+    } else if (!ctx.diffusion_model_path.empty()) {
+        model_path = ctx.diffusion_model_path;
+    }
+    return sanitize_output_stem(model_path.stem().u8string());
+}
+
+void request_generation_interrupt(ServerRuntime& runtime) {
+    runtime.interrupt_requested.store(true, std::memory_order_release);
+    if (runtime.sd_ctx != nullptr) {
+        sd_cancel_generation(runtime.sd_ctx, SD_CANCEL_ALL);
+    }
+}
+
+bool consume_generation_interrupt(ServerRuntime& runtime) {
+    return runtime.interrupt_requested.exchange(false, std::memory_order_acq_rel);
+}
+
+static std::string local_datetime_stamp() {
+    std::time_t now = std::time(nullptr);
+    std::tm local_tm{};
+#ifdef _WIN32
+    localtime_s(&local_tm, &now);
+#else
+    localtime_r(&now, &local_tm);
+#endif
+    char buf[16];
+    if (std::strftime(buf, sizeof(buf), "%Y%m%d%H%M%S", &local_tm) == 0) {
+        return "00000000000000";
+    }
+    return buf;
+}
+
+void server_preview_callback(int step, int frame_count, sd_image_t* frames, bool is_noisy, void* data) {
+    (void)is_noisy;
+    auto* preview = static_cast<PreviewState*>(data);
+    if (preview == nullptr || frames == nullptr || frame_count < 1 || frames[0].data == nullptr) {
+        return;
+    }
+    std::vector<uint8_t> png = encode_image_to_vector(EncodedImageFormat::PNG,
+                                                      frames[0].data,
+                                                      frames[0].width,
+                                                      frames[0].height,
+                                                      frames[0].channel);
+    if (png.empty()) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(preview->mutex);
+    preview->png = std::move(png);
+    // Two-pass samplers preview the first evaluation with a negative step.
+    // Sampling progress owns the step counter, and it only reports a finished step.
+    if (step > 0) {
+        preview->step = step;
+    }
+}
+
+void server_progress_callback(int step, int steps, float time, void* data) {
+    (void)time;
+    auto* preview = static_cast<PreviewState*>(data);
+    if (preview == nullptr) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(preview->mutex);
+    preview->step  = step;
+    preview->steps = steps;
+}
+
+static const char* scheduler_label(const SDGenerationParams& params) {
+    const char* name = sd_scheduler_name(params.sample_params.scheduler);
+    return name != nullptr ? name : "default";
+}
+
+static const char* sampler_label(const SDGenerationParams& params) {
+    const char* name = sd_sample_method_name(params.sample_params.sample_method);
+    return name != nullptr ? name : "default";
+}
+
+void begin_generation(ServerRuntime& runtime,
+                      const std::string& job_id,
+                      const char* kind,
+                      const SDGenerationParams& params,
+                      bool img2img) {
+    runtime.interrupt_requested.store(false, std::memory_order_release);
+    if (runtime.preview_state != nullptr) {
+        std::lock_guard<std::mutex> lock(runtime.preview_state->mutex);
+        runtime.preview_state->png.clear();
+        runtime.preview_state->step  = 0;
+        runtime.preview_state->steps = params.sample_params.sample_steps;
+    }
+    if (runtime.generation_status == nullptr) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(runtime.generation_status->mutex);
+    runtime.generation_status->busy            = true;
+    runtime.generation_status->img2img         = img2img;
+    runtime.generation_status->job_id          = job_id;
+    runtime.generation_status->kind            = kind != nullptr ? kind : (img2img ? "img2img" : "txt2img");
+    runtime.generation_status->prompt          = params.prompt;
+    runtime.generation_status->negative_prompt = params.negative_prompt;
+    runtime.generation_status->width           = params.get_resolved_width();
+    runtime.generation_status->height          = params.get_resolved_height();
+    runtime.generation_status->steps           = params.sample_params.sample_steps;
+    runtime.generation_status->seed            = params.seed;
+    runtime.generation_status->sampler         = sampler_label(params);
+    runtime.generation_status->scheduler       = scheduler_label(params);
+}
+
+void finish_generation(ServerRuntime& runtime,
+                       const std::string& job_id,
+                       const std::string& status,
+                       const std::string& prompt,
+                       const std::vector<std::string>& output_files) {
+    if (runtime.generation_status == nullptr) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(runtime.generation_status->mutex);
+    runtime.generation_status->busy                  = false;
+    runtime.generation_status->job_id.clear();
+    runtime.generation_status->last_finished_id      = job_id;
+    runtime.generation_status->last_finished_status  = status;
+    runtime.generation_status->last_finished_prompt  = prompt;
+    runtime.generation_status->last_finished_files   = output_files;
+}
+
+std::string save_generated_image(const ServerRuntime& runtime,
+                                 const sd_image_t& image,
+                                 const std::string& metadata) {
+    if (runtime.svr_params == nullptr || runtime.svr_params->output_dir.empty() || image.data == nullptr) {
+        return {};
+    }
+
+    const fs::path dir = runtime.svr_params->output_dir;
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    if (ec) {
+        LOG_ERROR("failed to create output dir '%s': %s", dir.u8string().c_str(), ec.message().c_str());
+        return {};
+    }
+
+    const std::string stamp = local_datetime_stamp();
+    const std::string stem  = output_model_stem(runtime);
+    const std::string base  = stamp + "_" + stem;
+    fs::path path           = dir / (base + ".png");
+    if (fs::exists(path, ec)) {
+        for (int n = 2; n < 10000; ++n) {
+            path = dir / (base + "_" + std::to_string(n) + ".png");
+            if (!fs::exists(path, ec)) {
+                break;
+            }
+        }
+    }
+
+    if (!write_image_to_file(path.u8string(),
+                             image.data,
+                             image.width,
+                             image.height,
+                             image.channel,
+                             metadata)) {
+        LOG_ERROR("save result image to '%s' failed", path.u8string().c_str());
+        return {};
+    }
+    LOG_INFO("save result image to '%s'", path.u8string().c_str());
+    return path.u8string();
 }

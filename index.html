@@ -35,6 +35,13 @@
       overflow-y: auto;
       padding-right: 0.5rem;
     }
+    .stage {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
     .viewport {
       flex: 1;
       display: flex;
@@ -45,6 +52,136 @@
       border: 1px dashed var(--muted);
       overflow: hidden;
       position: relative;
+    }
+    .stage-bottom {
+      display: flex;
+      gap: 0.75rem;
+      flex: 0 0 auto;
+      min-height: 148px;
+    }
+    .browser-wrap {
+      flex: 1;
+      min-width: 0;
+      background: var(--panel);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 0.6rem 0.75rem 0.75rem;
+    }
+    .preview-wrap {
+      flex: 0 0 180px;
+      background: var(--panel);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 0.6rem 0.75rem 0.75rem;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    .preview-wrap img {
+      display: block;
+      width: 100%;
+      height: 96px;
+      object-fit: contain;
+      border-radius: 6px;
+      background: #11141c;
+    }
+    .preview-frame {
+      position: relative;
+      height: 96px;
+      border-radius: 6px;
+      background: #11141c;
+      overflow: hidden;
+    }
+    .preview-frame img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 96px;
+      object-fit: contain;
+      background: #0b0d14;
+    }
+    .preview-frame:not(.has-frame) img {
+      visibility: hidden;
+    }
+    .browser-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      margin-bottom: 0.45rem;
+    }
+    .browser {
+      display: flex;
+      gap: 0.45rem;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding-bottom: 0.15rem;
+    }
+    .browser button {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 96px;
+      min-width: 72px;
+      padding: 0;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      background: #11141c;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+    .browser button.active {
+      border-color: var(--accent);
+    }
+    .browser .thumb-label {
+      font-size: 0.68rem;
+      color: var(--muted);
+      padding: 0 0.4rem;
+      white-space: nowrap;
+    }
+    .browser img {
+      display: block;
+      height: 96px;
+      width: auto;
+      border-radius: 6px;
+      object-fit: cover;
+      pointer-events: none;
+      -webkit-user-drag: none;
+    }
+    .browser-empty {
+      font-size: 0.8rem;
+      color: var(--muted);
+      padding: 0.4rem 0;
+    }
+    #i2iPanel {
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem;
+    }
+    #i2iPanel[hidden] { display: none; }
+    .i2i-dims {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .i2i-dims label {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      text-transform: none;
+      letter-spacing: 0;
+      cursor: pointer;
+    }
+    #i2iPreview {
+      display: block;
+      background: #11141c;
+      border-radius: 6px;
     }
     textarea, input, select {
       width: 100%;
@@ -59,7 +196,39 @@
     input[type="number"] {
       width: 75px;
       text-align: right;
+      -moz-appearance: textfield;
     }
+    input[type="number"]::-webkit-outer-spin-button,
+    input[type="number"]::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+    .stepper {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .row > .stepper { flex: 1; }
+    .stepper input[type="number"] {
+      flex: 1;
+      width: 4.6rem;
+      min-width: 4.2rem;
+    }
+    .slider-row .stepper { flex: 0 0 auto; }
+    .stepper-btn {
+      flex: 0 0 2.75rem;
+      width: 2.75rem;
+      height: 2.75rem;
+      padding: 0;
+      font-size: 1.55rem;
+      line-height: 1;
+      border-radius: 6px;
+      background: #333a4f;
+      color: var(--text);
+      border: 1px solid var(--border);
+      cursor: pointer;
+    }
+    .stepper-btn:hover { background: #3d4660; }
     input[type="range"] {
       flex: 1;
       padding: 0;
@@ -77,6 +246,18 @@
     .field-group { display: flex; flex-direction: column; }
     .slider-row { display: flex; align-items: center; gap: 0.5rem; }
     .row { display: flex; gap: 0.5rem; }
+    .nag-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.55rem 0.75rem;
+    }
+    .nag-grid .field-group { min-width: 0; }
+    .nag-grid .stepper { display: flex; width: 100%; }
+    .nag-grid .stepper input[type="number"] {
+      flex: 1;
+      width: auto;
+      min-width: 0;
+    }
 
     details {
       background: rgba(0, 0, 0, 0.2);
@@ -100,7 +281,51 @@
       gap: 0.75rem;
     }
 
+    .gen-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: stretch;
+    }
+    .settings-save { width: 100%; }
+    .settings-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .settings-list button {
+      width: 100%;
+      text-align: left;
+      white-space: normal;
+    }
+    .settings-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.55);
+      padding: 1rem;
+    }
+    .settings-overlay[hidden] { display: none; }
+    .settings-dialog {
+      width: min(420px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .settings-dialog .row { justify-content: flex-end; }
+    .settings-dialog .btn-primary,
+    .settings-dialog .btn-secondary {
+      flex: 0 0 auto;
+      width: auto;
+    }
     button.btn-primary {
+      flex: 1;
       background: var(--accent);
       color: white;
       border: none;
@@ -111,6 +336,17 @@
       transition: background 0.2s;
     }
     button.btn-primary:hover { background: var(--accent-hover); }
+    button.btn-cancel {
+      flex: 0 0 96px;
+      background: #4a2230;
+      color: #fecaca;
+      border: 1px solid #7f1d1d;
+      padding: 0.8rem 0.6rem;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button.btn-cancel:hover:not(:disabled) { background: #7f1d1d; }
     button.btn-secondary {
       background: #333a4f;
       color: var(--text);
@@ -120,31 +356,123 @@
       cursor: pointer;
     }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .designer {
+      background: rgba(0, 0, 0, 0.2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .designer.disabled {
+      opacity: 0.4;
+      pointer-events: none;
+    }
+    #scheduleChart {
+      width: 100%;
+      height: 160px;
+      background: #11141c;
+      border-radius: 6px;
+    }
+    .designer-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+    .designer-controls label { text-transform: none; letter-spacing: 0; }
+    .designer-check {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-transform: none;
+      letter-spacing: 0;
+      cursor: pointer;
+    }
+    .designer-hint {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .queue-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+    .queue-item {
+      display: flex;
+      gap: 0.35rem;
+      align-items: center;
+    }
+    .queue-item input {
+      flex: 1;
+      min-width: 0;
+    }
+    .queue-item .queue-x {
+      flex: 0 0 auto;
+      width: auto;
+      padding: 0.4rem 0.55rem;
+    }
+    .queue-empty {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .client-log {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.72rem;
+      line-height: 1.35;
+      color: #cbd5e1;
+      background: #11141c;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.45rem 0.5rem;
+      height: 9.5rem;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
 
     .gallery {
+      position: absolute;
+      inset: 0;
       display: flex;
       gap: 0.5rem;
-      max-width: 100%;
-      max-height: 100%;
-      flex-wrap: wrap;
       justify-content: center;
       align-items: center;
-      overflow: auto;
+      overflow: hidden;
       padding: 1rem;
     }
     .gallery img {
       max-width: 100%;
-      max-height: 85vh;
+      max-height: 100%;
       object-fit: contain;
       border-radius: 8px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
-    .status { position: absolute; bottom: 1rem; font-size: 0.85rem; color: var(--muted); }
+    .status {
+      position: absolute;
+      bottom: 1rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .status.live {
+      color: #fff;
+      background: #2563eb;
+      padding: 0.28rem 0.7rem;
+      border-radius: 6px;
+      font-weight: 650;
+      letter-spacing: 0.02em;
+    }
   </style>
 </head>
 <body>
 
   <div class="controls">
+    <div class="field-group">
+      <label>Queue</label>
+      <div id="queueList" class="queue-list"></div>
+    </div>
+
     <div class="field-group">
       <label>Prompt</label>
       <textarea id="prompt" placeholder="A cozy cabin in the misty pine forest...">a cinematic shot of an ancient library, dust motes in sunbeams, hyperrealistic, octane render</textarea>
@@ -155,13 +483,36 @@
       <textarea id="negPrompt" style="height: 45px;">blurry, low quality, distorted, watermark</textarea>
     </div>
 
+    <div class="field-group">
+      <label title="Flux.2 dev attention guidance. CFG still uses Negative Prompt.">NAG Prompt</label>
+      <textarea id="nagPrompt" style="height: 45px;" placeholder="Flux.2 dev only. Empty leaves NAG off."></textarea>
+    </div>
+    <div class="nag-grid">
+      <div class="field-group">
+        <label title="1 leaves NAG off. 5 is the usual on value.">NAG Scale</label>
+        <input type="number" id="nagScale" min="1" max="20" step="0.5" value="1" />
+      </div>
+      <div class="field-group">
+        <label>NAG Tau</label>
+        <input type="number" id="nagTau" min="0" max="100" step="0.1" value="2.5" />
+      </div>
+      <div class="field-group">
+        <label>NAG Alpha</label>
+        <input type="number" id="nagAlpha" min="0" max="1" step="0.05" value="0.25" />
+      </div>
+      <div class="field-group">
+        <label title="NAG applies while sigma is at least this value.">Sigma End</label>
+        <input type="number" id="nagSigmaEnd" min="0" max="1000" step="0.05" value="0.75" />
+      </div>
+    </div>
+
     <!-- Seed & Randomizer -->
     <div class="field-group">
       <label>Seed (-1 for Random)</label>
       <div class="row">
         <input type="number" id="seed" value="-1" style="flex: 1;" />
         <button class="btn-secondary" title="Roll New Seed" onclick="rollSeed()">🎲 Roll</button>
-        <button class="btn-secondary" title="Reset to Random" onclick="document.getElementById('seed').value = -1">🔄 -1</button>
+        <button class="btn-secondary" title="Reset to Random" onclick="document.getElementById('seed').value = -1; persistSession()">🔄 -1</button>
       </div>
     </div>
 
@@ -169,8 +520,8 @@
     <div class="field-group">
       <label>Sampling Steps</label>
       <div class="slider-row">
-        <input type="range" id="steps" min="1" max="100" value="20" oninput="stepsNum.value = this.value" />
-        <input type="number" id="stepsNum" min="1" max="100" value="20" oninput="steps.value = this.value" />
+        <input type="range" id="steps" min="1" max="100" value="20" oninput="stepsNum.value = this.value; drawScheduleChart()" />
+        <input type="number" id="stepsNum" min="1" max="100" value="20" oninput="steps.value = this.value; drawScheduleChart()" />
       </div>
     </div>
 
@@ -205,6 +556,41 @@
       </div>
     </div>
 
+    <div class="field-group">
+      <label>Mode</label>
+      <select id="genMode" onchange="syncI2i()">
+        <option value="t2i" selected>t2i</option>
+        <option value="i2i">i2i</option>
+      </select>
+    </div>
+
+    <div id="i2iPanel" hidden>
+      <div class="row">
+        <input type="file" id="i2iFile" accept="image/*" style="flex:1" />
+        <button class="btn-secondary" type="button" onclick="useShownForI2i()">Use shown</button>
+      </div>
+      <div class="field-group">
+        <label>Denoise strength</label>
+        <div class="slider-row">
+          <input type="range" id="i2iStrength" min="0" max="1" step="0.05" value="0.75" oninput="i2iStrengthNum.value = this.value" />
+          <input type="number" id="i2iStrengthNum" min="0" max="1" step="0.05" value="0.75" oninput="i2iStrength.value = this.value" />
+        </div>
+      </div>
+      <div class="field-group">
+        <label>dim:</label>
+        <div class="i2i-dims" onchange="updateI2iPreview()">
+          <label><input type="radio" name="i2iDim" value="source" checked style="width:auto" /> source</label>
+          <label><input type="radio" name="i2iDim" value="stretch" style="width:auto" /> stretch</label>
+          <label><input type="radio" name="i2iDim" value="fill" style="width:auto" /> fill</label>
+          <label><input type="radio" name="i2iDim" value="fit-white" style="width:auto" /> fit+white</label>
+          <label><input type="radio" name="i2iDim" value="fit-black" style="width:auto" /> fit+black</label>
+          <label><input type="radio" name="i2iDim" value="fit-grey" style="width:auto" /> fit+grey</label>
+          <label><input type="radio" name="i2iDim" value="fit-tile" style="width:auto" /> fit+tile</label>
+        </div>
+      </div>
+      <canvas id="i2iPreview" width="320" height="140"></canvas>
+    </div>
+
     <!-- Sampler & Scheduler -->
     <div class="row">
       <div class="field-group" style="flex:1">
@@ -221,13 +607,26 @@
       </div>
       <div class="field-group" style="flex:1">
         <label>Schedule Type</label>
-        <select id="scheduler">
+        <select id="scheduler" onchange="syncDesigner()">
           <option value="" selected>Default</option>
+          <option value="__designer__">[Schedule Designer]</option>
           <option value="discrete">Discrete</option>
           <option value="karras">Karras</option>
           <option value="exponential">Exponential</option>
           <option value="ays">AYS</option>
+          <option value="gits">GITS</option>
           <option value="sgm_uniform">SGM Uniform</option>
+          <option value="simple">Simple</option>
+          <option value="smoothstep">Smoothstep</option>
+          <option value="kl_optimal">KL Optimal</option>
+          <option value="lcm">LCM</option>
+          <option value="bong_tangent">Bong tangent</option>
+          <option value="tangent">Tangent</option>
+          <option value="ltx2">LTX2</option>
+          <option value="logit_normal">Logit-Normal</option>
+          <option value="flux2">Flux2</option>
+          <option value="flux">Flux</option>
+          <option value="beta">Beta</option>
         </select>
       </div>
     </div>
@@ -271,36 +670,1184 @@
       </div>
     </details>
 
-    <button id="genBtn" class="btn-primary" onclick="generate()">Generate Image</button>
+    <div class="field-group">
+      <label>Saved settings</label>
+      <div id="savedSettings" class="settings-list"></div>
+      <button class="btn-secondary settings-save" type="button" onclick="openSaveSettings()">Save settings</button>
+    </div>
+
+    <div class="gen-actions">
+      <button id="cancelBtn" class="btn-cancel" type="button" disabled onclick="cancelCurrent()">Cancel</button>
+      <button id="genBtn" class="btn-primary" type="button" onclick="enqueueGenerate()">Generate Image</button>
+    </div>
+
+    <div id="designerPanel" class="designer disabled">
+      <label>Schedule Designer</label>
+      <select id="designerFormula" onchange="syncDesigner()">
+        <option value="discrete">Discrete</option>
+        <option value="karras">Karras</option>
+        <option value="exponential">Exponential</option>
+        <option value="ays">AYS</option>
+        <option value="gits">GITS</option>
+        <option value="sgm_uniform">SGM Uniform</option>
+        <option value="simple" selected>Simple</option>
+        <option value="smoothstep">Smoothstep</option>
+        <option value="kl_optimal">KL Optimal</option>
+        <option value="lcm">LCM</option>
+        <option value="bong_tangent">Bong tangent</option>
+        <option value="tangent">Tangent</option>
+        <option value="ltx2">LTX2</option>
+        <option value="logit_normal">Logit-Normal</option>
+        <option value="flux2">Flux2</option>
+        <option value="flux">Flux</option>
+        <option value="beta">Beta</option>
+      </select>
+      <div id="designerControls" class="designer-controls"></div>
+    </div>
+    <canvas id="scheduleChart" width="360" height="160"></canvas>
+
+    <div class="field-group">
+      <label>Client log</label>
+      <div id="clientLog" class="client-log"></div>
+    </div>
   </div>
 
-  <div class="viewport">
-    <div id="gallery" class="gallery"></div>
-    <div id="status" class="status">Ready (Target: Port 1493, ComfyUI RNG)</div>
+  <div class="stage">
+    <div class="viewport">
+      <div id="gallery" class="gallery"></div>
+      <div id="status" class="status">Ready (Target: Port 1493, ComfyUI RNG)</div>
+    </div>
+    <div class="stage-bottom">
+      <div class="browser-wrap">
+        <div class="browser-label">Outputs</div>
+        <div id="browser" class="browser"></div>
+      </div>
+      <div class="preview-wrap">
+        <div class="browser-label">Preview</div>
+        <div id="livePreviewFrame" class="preview-frame">
+          <img id="livePreviewImg" alt="preview" decoding="async" />
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="saveSettingsOverlay" class="settings-overlay" hidden>
+    <div class="settings-dialog" role="dialog" aria-label="Save settings">
+      <label for="saveSettingsNote">Save settings</label>
+      <input id="saveSettingsNote" type="text" maxlength="80" placeholder="Name" />
+      <div class="row">
+        <button class="btn-secondary" type="button" onclick="cancelSaveSettings()">Cancel</button>
+        <button class="btn-primary" type="button" onclick="confirmSaveSettings()">Save</button>
+      </div>
+    </div>
   </div>
 
   <script>
+    const studioBase = 'http://127.0.0.1:3000';
+    const apiBase = 'http://127.0.0.1:1493';
+    const apiBaseReady = Promise.resolve();
+    const DESIGNER_SENTINEL = '__designer__';
+    const SIGMA_MIN = 0.03;
+    const SIGMA_MAX = 14;
+    let selectedOutput = null;
+    let autoShowResult = true;
+    let pendingJobs = [];
+    let currentJob = null;
+    let previewUrl = null;
+    let previewWantKey = null;
+    let previewShownKey = null;
+    let previewInFlight = false;
+    let liveSamplerStep = 0;
+    let liveSamplerSteps = 0;
+    let jobSchedule = null;
+    let cancelArmedId = null;
+    const scheduleQueue = [];
+    const CLIENT_LOG_KEY = 'sd-doodad-client-log';
+    const CLIENT_LOG_MAX = 160;
+    const clientLogLines = [];
+
+    function persistClientLog() {
+      try {
+        localStorage.setItem(CLIENT_LOG_KEY, JSON.stringify(clientLogLines));
+      } catch (e) { /* quota / private mode */ }
+    }
+
+    function restoreClientLog() {
+      try {
+        const raw = localStorage.getItem(CLIENT_LOG_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return;
+        parsed.forEach((line) => {
+          if (typeof line === 'string') clientLogLines.push(line);
+        });
+        while (clientLogLines.length > CLIENT_LOG_MAX) clientLogLines.shift();
+      } catch (e) { /* ignore bad cache */ }
+    }
+
+    const SESSION_KEY = 'sd-doodad-session';
+
+    function readFormState() {
+      const value = (id) => document.getElementById(id).value;
+      return {
+        prompt: value('prompt'),
+        negPrompt: value('negPrompt'),
+        nagPrompt: value('nagPrompt'),
+        nagScale: value('nagScale'),
+        nagTau: value('nagTau'),
+        nagAlpha: value('nagAlpha'),
+        nagSigmaEnd: value('nagSigmaEnd'),
+        seed: value('seed'),
+        steps: value('stepsNum'),
+        cfg: value('cfgNum'),
+        width: value('width'),
+        height: value('height'),
+        sampler: value('sampler'),
+        scheduler: value('scheduler'),
+        batchSize: value('batchSize'),
+        clipSkip: value('clipSkip'),
+        enableHr: document.getElementById('enableHr').checked,
+        hrScale: value('hrScale'),
+        hrSteps: value('hrSteps'),
+        hrDenoise: value('hrDenoiseNum'),
+        designerFormula: value('designerFormula'),
+        genMode: value('genMode'),
+        i2iStrength: value('i2iStrengthNum'),
+        i2iDim: (document.querySelector('input[name="i2iDim"]:checked') || {}).value || 'source',
+      };
+    }
+
+    function applyFormState(form) {
+      if (!form || typeof form !== 'object') return;
+      const set = (id, val) => {
+        if (val == null) return;
+        const el = document.getElementById(id);
+        if (el) el.value = val;
+      };
+      set('prompt', form.prompt);
+      set('negPrompt', form.negPrompt);
+      set('nagPrompt', form.nagPrompt);
+      set('nagScale', form.nagScale);
+      set('nagTau', form.nagTau);
+      set('nagAlpha', form.nagAlpha);
+      set('nagSigmaEnd', form.nagSigmaEnd);
+      set('seed', form.seed);
+      set('steps', form.steps);
+      set('stepsNum', form.steps);
+      set('cfg', form.cfg);
+      set('cfgNum', form.cfg);
+      set('width', form.width);
+      set('height', form.height);
+      set('sampler', form.sampler);
+      set('scheduler', form.scheduler);
+      set('batchSize', form.batchSize);
+      set('clipSkip', form.clipSkip);
+      set('hrScale', form.hrScale);
+      set('hrSteps', form.hrSteps);
+      set('hrDenoise', form.hrDenoise);
+      set('hrDenoiseNum', form.hrDenoise);
+      set('designerFormula', form.designerFormula);
+      set('genMode', form.genMode);
+      set('i2iStrength', form.i2iStrength);
+      set('i2iStrengthNum', form.i2iStrength);
+      if (form.i2iDim) {
+        const dim = document.querySelector('input[name="i2iDim"][value="' + form.i2iDim + '"]');
+        if (dim) dim.checked = true;
+      }
+      if (typeof form.enableHr === 'boolean') {
+        document.getElementById('enableHr').checked = form.enableHr;
+      }
+    }
+
+    let savedDesigner = {};
+
+    function collectDesignerState() {
+      const kind = document.getElementById('designerFormula').value;
+      document.querySelectorAll('#designerControls [data-key]').forEach(el => {
+        savedDesigner[kind + '.' + el.dataset.key] = el.type === 'checkbox' ? el.checked : el.value;
+      });
+      return savedDesigner;
+    }
+
+    function persistSession() {
+      try {
+        collectDesignerState();
+        localStorage.setItem(SESSION_KEY, JSON.stringify({
+          form: readFormState(),
+          designer: savedDesigner,
+        }));
+      } catch (e) { /* quota / private mode */ }
+    }
+
+    function restoreSession() {
+      let data = null;
+      try {
+        const raw = localStorage.getItem(SESSION_KEY);
+        if (raw) data = JSON.parse(raw);
+      } catch (e) { /* ignore bad cache */ }
+      if (!data || typeof data !== 'object') return;
+      if (data.designer && typeof data.designer === 'object') savedDesigner = data.designer;
+      applyFormState(data.form);
+    }
+
+    function openSaveSettings() {
+      const overlay = document.getElementById('saveSettingsOverlay');
+      overlay.hidden = false;
+      const input = document.getElementById('saveSettingsNote');
+      input.focus();
+      input.select();
+    }
+
+    function cancelSaveSettings() {
+      document.getElementById('saveSettingsOverlay').hidden = true;
+    }
+
+    async function confirmSaveSettings() {
+      const note = document.getElementById('saveSettingsNote').value.trim();
+      if (!note) return;
+      collectDesignerState();
+      const form = readFormState();
+      delete form.seed;
+      try {
+        const res = await fetch(studioBase + '/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            note,
+            model: connectedModel || 'model',
+            i2i: isI2i(),
+            form,
+            designer: savedDesigner,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        document.getElementById('saveSettingsNote').value = '';
+        cancelSaveSettings();
+        dlog('saved settings ' + (data.name || note));
+        await refreshSavedSettings();
+      } catch (err) {
+        setStatusText('Could not save settings: ' + (err && err.message ? err.message : err), false);
+      }
+    }
+
+    async function refreshSavedSettings() {
+      const host = document.getElementById('savedSettings');
+      if (!host) return;
+      let settings = [];
+      try {
+        const res = await fetch(studioBase + '/settings', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        settings = Array.isArray(data.settings) ? data.settings : [];
+      } catch (err) {
+        host.innerHTML = '';
+        const empty = document.createElement('div');
+        empty.className = 'browser-empty';
+        empty.textContent = 'Settings server unavailable';
+        host.appendChild(empty);
+        return;
+      }
+      host.innerHTML = '';
+      if (!settings.length) {
+        const empty = document.createElement('div');
+        empty.className = 'browser-empty';
+        empty.textContent = 'None saved';
+        host.appendChild(empty);
+        return;
+      }
+      settings.forEach(item => {
+        const name = item && item.name;
+        if (!name) return;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn-secondary';
+        button.textContent = name;
+        button.title = 'Load ' + name;
+        button.addEventListener('click', () => { void loadSavedSetting(name); });
+        host.appendChild(button);
+      });
+    }
+
+    async function loadSavedSetting(name) {
+      try {
+        const res = await fetch(studioBase + '/settings/' + encodeURIComponent(name), { cache: 'no-store' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        if (data.designer && typeof data.designer === 'object') savedDesigner = data.designer;
+        if (data.form) delete data.form.seed;
+        applyFormState(data.form);
+        syncDesigner();
+        syncI2i();
+        dlog('loaded settings ' + name);
+      } catch (err) {
+        setStatusText('Could not load settings: ' + (err && err.message ? err.message : err), false);
+      }
+    }
+
+    async function pingServer() {
+      try {
+        const res = await fetch(apiBase + '/sdapi/v1/options', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const model = data.sd_model_checkpoint || 'ok';
+        connectedModel = model === 'ok' ? '' : model;
+        dlog('sd-server connected ' + model);
+        drawScheduleChart();
+        return model;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function softwareCtx(canvas) {
+      return canvas.getContext('2d', { alpha: false, willReadFrequently: true });
+    }
+
+    function dlog(msg) {
+      const now = new Date();
+      const hh = String(now.getHours()).padStart(2, '0');
+      const mm = String(now.getMinutes()).padStart(2, '0');
+      const ss = String(now.getSeconds()).padStart(2, '0');
+      const line = hh + ':' + mm + ':' + ss + ' ' + msg;
+      clientLogLines.push(line);
+      if (clientLogLines.length > CLIENT_LOG_MAX) clientLogLines.shift();
+      persistClientLog();
+      const el = document.getElementById('clientLog');
+      if (el) {
+        el.textContent = clientLogLines.join('\n');
+        el.scrollTop = el.scrollHeight;
+      }
+      console.log('[doodad]', msg);
+    }
+
+    function setStatusText(text, live) {
+      const status = document.getElementById('status');
+      status.innerText = text;
+      status.classList.toggle('live', !!live);
+    }
+
+    function rememberQueuedSchedule(payload) {
+      const requested = Math.max(1, Number(payload.steps) || 1);
+      const strength = Number(payload.denoising_strength);
+      scheduleQueue.push({
+        requested,
+        skipped: payload.i2i ? skippedDenoiseSteps(requested, Number.isFinite(strength) ? strength : 1) : 0,
+      });
+    }
+
+    function takeJobSchedule() {
+      if (scheduleQueue.length) {
+        jobSchedule = scheduleQueue.shift();
+        return;
+      }
+      const requested = Math.max(1, Number(document.getElementById('stepsNum').value) || 1);
+      const strength = Number(document.getElementById('i2iStrengthNum').value);
+      jobSchedule = {
+        requested,
+        skipped: isI2i() ? skippedDenoiseSteps(requested, strength) : 0,
+      };
+    }
+
+    // Heun and other two-pass samplers report the first evaluation as a negative
+    // step. That pass is not a completed sample step. The last step stays negative
+    // when the schedule ends at sigma 0, and that one does count.
+    function completedSampleStep(step, steps) {
+      const n = Number(step);
+      const total = Number(steps);
+      if (!Number.isFinite(n) || !Number.isFinite(total) || total <= 0) return 0;
+      if (n > 0 && n <= total) return n;
+      if (n < 0 && Math.abs(n) === total) return total;
+      return 0;
+    }
+
+    function scheduleLabel(step, steps) {
+      const n = completedSampleStep(step, steps);
+      const total = Number(steps);
+      if (!n || !Number.isFinite(total) || total <= 0) return 'starting';
+      return 'step ' + n + ' of ' + total;
+    }
+
+    function setLivePreviewStatus(text, keepFrame) {
+      const frame = document.getElementById('livePreviewFrame');
+      if (!keepFrame) {
+        frame.classList.remove('has-frame');
+        const img = document.getElementById('livePreviewImg');
+        img.removeAttribute('src');
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+          previewUrl = null;
+        }
+        previewWantKey = null;
+        previewShownKey = null;
+        liveSamplerStep = 0;
+        liveSamplerSteps = 0;
+      }
+    }
+
+    function loadPreviewImage(img, url) {
+      return new Promise((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('preview image failed'));
+        img.src = url;
+      });
+    }
+
+    async function pullPreview() {
+      if (previewInFlight || document.hidden) return;
+      const key = previewWantKey;
+      if (!key || key === previewShownKey) return;
+      previewInFlight = true;
+      try {
+        const res = await fetch(apiBase + '/preview.png?t=' + encodeURIComponent(key), { cache: 'no-store' });
+        if (!res.ok || res.status === 204) return;
+        const gotStep = res.headers.get('X-SD-Step');
+        const gotSteps = res.headers.get('X-SD-Steps');
+        const blob = await res.blob();
+        if (!blob || blob.size < 32) return;
+        const url = URL.createObjectURL(blob);
+        const img = document.getElementById('livePreviewImg');
+        const frame = document.getElementById('livePreviewFrame');
+        try {
+          await loadPreviewImage(img, url);
+        } catch (e) {
+          URL.revokeObjectURL(url);
+          if (previewUrl) img.src = previewUrl;
+          throw e;
+        }
+        frame.classList.add('has-frame');
+        const previous = previewUrl;
+        previewUrl = url;
+        if (previous) URL.revokeObjectURL(previous);
+        previewShownKey = (gotStep != null && gotSteps != null) ? (gotStep + '/' + gotSteps) : key;
+      } catch (e) {
+        dlog('preview fetch failed: ' + (e && e.message ? e.message : e));
+      } finally {
+        previewInFlight = false;
+      }
+    }
+
+    function showLivePreview(step, steps, hasPreview) {
+      const done = completedSampleStep(step, steps);
+      if (done) {
+        liveSamplerStep = done;
+        liveSamplerSteps = Number(steps);
+        if (currentJob && !currentJob.i2i) {
+          jobSchedule = { requested: liveSamplerSteps, skipped: 0 };
+        }
+        setStatusText(scheduleLabel(liveSamplerStep, liveSamplerSteps), true);
+        drawScheduleChart();
+      } else if (!(liveSamplerStep > 0)) {
+        setStatusText('starting', true);
+      }
+      if (!hasPreview) return;
+      const key = String(step) + '/' + String(steps);
+      previewWantKey = key;
+      if (key !== previewShownKey) void pullPreview();
+    }
+
     function rollSeed() {
       document.getElementById('seed').value = Math.floor(Math.random() * 2147483647);
+      persistSession();
     }
 
     function applyPreset(val) {
       const [w, h] = val.split('x').map(Number);
       document.getElementById('width').value = w;
       document.getElementById('height').value = h;
+      persistSession();
+      if (isI2i()) updateI2iPreview();
     }
 
-    async function generate() {
-      const btn = document.getElementById('genBtn');
-      const status = document.getElementById('status');
-      const gallery = document.getElementById('gallery');
+    function designerEnabled() {
+      return document.getElementById('scheduler').value === DESIGNER_SENTINEL;
+    }
 
-      btn.disabled = true;
-      status.innerText = "Processing job in sd-server...";
+    const DESIGNER_FIELDS = {
+      beta: [
+        { key: 'alpha', label: 'Alpha', min: 0.05, max: 8, step: 0.05, value: 0.6 },
+        { key: 'beta', label: 'Beta', min: 0.05, max: 8, step: 0.05, value: 0.6 },
+      ],
+      flux: [
+        { key: 'base_shift', label: 'Base shift', min: 0, max: 4, step: 0.05, value: 0.5 },
+        { key: 'max_shift', label: 'Max shift', min: 0, max: 4, step: 0.05, value: 1.15 },
+      ],
+      ltx2: [
+        { key: 'base_shift', label: 'Base shift', min: 0, max: 6, step: 0.05, value: 0.95 },
+        { key: 'max_shift', label: 'Max shift', min: 0, max: 6, step: 0.05, value: 2.05 },
+        { key: 'terminal', label: 'Terminal', min: 0, max: 0.99, step: 0.01, value: 0.1 },
+        { key: 'stretch', label: 'Stretch', type: 'bool', value: true },
+      ],
+      logit_normal: [
+        { key: 'mu', label: 'Mu', min: -4, max: 4, step: 0.05, value: 0 },
+        { key: 'std', label: 'Std', min: 0.05, max: 6, step: 0.05, value: 1.75 },
+        { key: 'logsnr_min', label: 'LogSNR min', min: -30, max: 0, step: 0.5, value: -15 },
+        { key: 'logsnr_max', label: 'LogSNR max', min: 0, max: 30, step: 0.5, value: 18 },
+        { key: 'resolution_aware', label: 'Resolution aware', type: 'bool', value: true },
+      ],
+      tangent: [
+        { key: 'midpoint', label: 'Midpoint', min: 0.05, max: 0.95, step: 0.01, value: 0.5 },
+        { key: 'pivot_1', label: 'Pivot 1', min: -0.5, max: 1.5, step: 0.01, value: 0.25 },
+        { key: 'pivot_2', label: 'Pivot 2', min: -0.5, max: 1.5, step: 0.01, value: 0.75 },
+        { key: 'slope_1', label: 'Slope 1', min: -20, max: 20, step: 0.1, value: 1 },
+        { key: 'slope_2', label: 'Slope 2', min: -20, max: 20, step: 0.1, value: 1 },
+        { key: 'start', label: 'Start', min: 0, max: 1, step: 0.01, value: 1 },
+        { key: 'middle', label: 'Middle', min: 0, max: 1, step: 0.01, value: 0.5 },
+        { key: 'end', label: 'End', min: 0, max: 1, step: 0.01, value: 0 },
+      ],
+    };
 
-      const enableHr = document.getElementById('enableHr').checked;
+    function designerFieldValue(field) {
+      const kind = document.getElementById('designerFormula').value;
+      const saved = savedDesigner[kind + '.' + field.key];
+      if (field.type === 'bool') return saved == null ? field.value : !!saved;
+      if (saved == null || saved === '') return field.value;
+      const n = Number(saved);
+      return Number.isFinite(n) ? n : field.value;
+    }
+
+    function renderDesignerControls() {
+      const host = document.getElementById('designerControls');
+      if (!host) return;
+      const kind = document.getElementById('designerFormula').value;
+      const fields = DESIGNER_FIELDS[kind] || [];
+      host.innerHTML = '';
+      const hints = {
+        tangent: 'Two curves, joined at Middle. Move a pivot to spend more steps on that noise level.',
+      };
+      if (hints[kind]) {
+        const hint = document.createElement('div');
+        hint.className = 'designer-hint';
+        hint.textContent = hints[kind];
+        host.appendChild(hint);
+      } else if (!fields.length) {
+        const hint = document.createElement('div');
+        hint.className = 'designer-hint';
+        hint.textContent = 'No extra parameters for this schedule.';
+        host.appendChild(hint);
+      }
+      fields.forEach(field => {
+        if (field.type === 'bool') {
+          const label = document.createElement('label');
+          label.className = 'designer-check';
+          const input = document.createElement('input');
+          input.type = 'checkbox';
+          input.dataset.key = field.key;
+          input.checked = designerFieldValue(field);
+          input.style.width = 'auto';
+          label.append(input, document.createTextNode(field.label));
+          host.appendChild(label);
+          return;
+        }
+        const group = document.createElement('div');
+        group.className = 'field-group';
+        const label = document.createElement('label');
+        label.textContent = field.label;
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.dataset.key = field.key;
+        input.min = String(field.min);
+        input.max = String(field.max);
+        input.step = String(field.step);
+        input.value = String(designerFieldValue(field));
+        group.append(label, input);
+        host.appendChild(group);
+      });
+      installSteppers(host);
+    }
+
+    function syncDesigner() {
+      const panel = document.getElementById('designerPanel');
+      panel.classList.toggle('disabled', !designerEnabled());
+      renderDesignerControls();
+      drawScheduleChart();
+    }
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function fluxTimeShift(mu, t) {
+      if (t <= 0) return 0;
+      return Math.exp(mu) / (Math.exp(mu) + Math.pow(1 / t - 1, 1));
+    }
+
+    function bongTangentSeg(steps, slope, pivot, start, end) {
+      const sigmas = [];
+      if (steps <= 0) return sigmas;
+      const smax = ((2 / Math.PI) * Math.atan(-slope * (0 - pivot)) + 1) * 0.5;
+      const smin = ((2 / Math.PI) * Math.atan(-slope * ((steps - 1) - pivot)) + 1) * 0.5;
+      const srange = smax - smin;
+      const sscale = start - end;
+      if (Math.abs(srange) < 1e-8) {
+        for (let i = 0; i < steps; i++) {
+          const t = steps === 1 ? 0 : i / (steps - 1);
+          sigmas.push(start + (end - start) * t);
+        }
+        return sigmas;
+      }
+      for (let x = 0; x < steps; x++) {
+        const v = ((2 / Math.PI) * Math.atan(-slope * (x - pivot)) + 1) * 0.5;
+        sigmas.push(((v - smin) / srange) * sscale + end);
+      }
+      return sigmas;
+    }
+
+    function designerNumber(key, fallback) {
+      if (!designerEnabled()) return fallback;
+      const kind = document.getElementById('designerFormula').value;
+      const el = document.querySelector('#designerControls [data-key="' + key + '"]');
+      if (!el || el.type === 'checkbox') {
+        const n = Number(savedDesigner[kind + '.' + key]);
+        return Number.isFinite(n) ? n : fallback;
+      }
+      const n = Number(el.value);
+      return Number.isFinite(n) ? n : fallback;
+    }
+
+    function designerBool(key, fallback) {
+      if (!designerEnabled()) return fallback;
+      const kind = document.getElementById('designerFormula').value;
+      const el = document.querySelector('#designerControls [data-key="' + key + '"]');
+      if (!el) {
+        const saved = savedDesigner[kind + '.' + key];
+        return saved == null ? fallback : !!saved;
+      }
+      return !!el.checked;
+    }
+
+    function imageSeqLen() {
+      let w = Number(document.getElementById('width').value) || 512;
+      let h = Number(document.getElementById('height').value) || 512;
+      if (isI2i() && i2iDim() === 'source' && i2iSource && i2iSource.naturalWidth) {
+        w = round64(i2iSource.naturalWidth);
+        h = round64(i2iSource.naturalHeight);
+      }
+      return Math.max(1, Math.round((w / 16) * (h / 16)));
+    }
+
+    function sigmoid(x) {
+      return 1 / (1 + Math.exp(-x));
+    }
+
+    function normsinv(p) {
+      const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+      const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01, 1];
+      const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+      const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00, 1];
+      const plow = 0.02425;
+      const phigh = 1 - plow;
+      if (p <= 0) return -8;
+      if (p >= 1) return 8;
+      let q;
+      if (p < plow) {
+        q = Math.sqrt(-2 * Math.log(p));
+        return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+          ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+      }
+      if (p > phigh) {
+        q = Math.sqrt(-2 * Math.log(1 - p));
+        return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) /
+          ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+      }
+      q = p - 0.5;
+      const r = q * q;
+      return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q /
+        (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+    }
+
+    const AYS_SD15 = [14.6146412293, 6.4745760956, 3.8636745985, 2.6946151520, 1.8841921177, 1.3943805092, 0.9642583904, 0.6523686016, 0.3977456272, 0.1515232662, 0.0291671582];
+
+    function resampleLog(levels, n) {
+      if (n <= 1) return [levels[0]];
+      const src = levels.map(v => Math.log(Math.max(v, 1e-8)));
+      const out = [];
+      for (let i = 0; i < n; i++) {
+        const t = i / (n - 1) * (src.length - 1);
+        const j = Math.min(src.length - 2, Math.floor(t));
+        const f = t - j;
+        out.push(Math.exp(src[j] * (1 - f) + src[j + 1] * f));
+      }
+      return out;
+    }
+
+    function previewSigmas(kind, n) {
+      const steps = Math.max(1, n | 0);
+      const out = [];
+      const tToSigma = (t) => lerp(SIGMA_MAX, SIGMA_MIN, 1 - (t / 999));
+      const seq = imageSeqLen();
+      if (kind === 'karras') {
+        const rho = 7;
+        const smin = Math.max(SIGMA_MIN, 1e-6);
+        const minInv = Math.pow(smin, 1 / rho);
+        const maxInv = Math.pow(SIGMA_MAX, 1 / rho);
+        for (let i = 0; i < steps; i++) {
+          const u = steps === 1 ? 0 : i / (steps - 1);
+          out.push(Math.pow(maxInv + u * (minInv - maxInv), rho));
+        }
+      } else if (kind === 'exponential') {
+        const logMin = Math.log(Math.max(SIGMA_MIN, 1e-6));
+        const logMax = Math.log(SIGMA_MAX);
+        const step = steps === 1 ? 0 : (logMax - logMin) / (steps - 1);
+        for (let i = 0; i < steps; i++) out.push(Math.exp(logMax - step * i));
+      } else if (kind === 'ays') {
+        out.push(...resampleLog(AYS_SD15, steps));
+      } else if (kind === 'gits') {
+        for (let i = 0; i < steps; i++) {
+          const u = steps === 1 ? 0 : i / (steps - 1);
+          out.push(SIGMA_MAX * Math.pow(Math.max(SIGMA_MIN, 1e-6) / SIGMA_MAX, Math.pow(u, 1.2)));
+        }
+      } else if (kind === 'bong_tangent') {
+        const start = SIGMA_MAX;
+        const end = SIGMA_MIN;
+        const middle = SIGMA_MIN + (SIGMA_MAX - SIGMA_MIN) * 0.5;
+        const total = steps + 2;
+        const pivot = Math.floor(total * 0.6);
+        const slope = 0.2 / (total / 40);
+        const midpoint = Math.floor(total * 0.6);
+        const stage2 = total - midpoint;
+        const stage1 = total - stage2;
+        const s1 = bongTangentSeg(stage1, slope, pivot, start, middle);
+        const s2 = bongTangentSeg(stage2, slope, pivot - stage1, middle, end);
+        if (s1.length) s1.pop();
+        out.push(...s1, ...s2);
+        while (out.length < steps) out.push(end);
+        if (out.length > steps) out.length = steps;
+      } else if (kind === 'tangent') {
+        const expanded = steps + 2;
+        let mid = Math.round(designerNumber('midpoint', 0.5) * steps);
+        mid = Math.min(expanded - 1, Math.max(1, mid));
+        const stage1 = mid;
+        const stage2 = expanded - mid;
+        const p1 = designerNumber('pivot_1', 0.25) * steps;
+        const p2 = designerNumber('pivot_2', 0.75) * steps;
+        const start = designerNumber('start', 1);
+        const middle = designerNumber('middle', 0.5);
+        const end = designerNumber('end', 0);
+        const s1 = bongTangentSeg(stage1, designerNumber('slope_1', 1), p1, start, middle);
+        const s2 = bongTangentSeg(stage2, designerNumber('slope_2', 1), p2 - stage1, middle, end);
+        if (s1.length) s1.pop();
+        out.push(...s1, ...s2);
+      } else if (kind === 'flux' || kind === 'flux2' || kind === 'ltx2') {
+        let mu;
+        if (kind === 'flux') {
+          const base = designerNumber('base_shift', 0.5);
+          const max = designerNumber('max_shift', 1.15);
+          const m = (max - base) / (4096 - 256);
+          mu = seq * m + (base - m * 256);
+        } else if (kind === 'ltx2') {
+          const base = designerNumber('base_shift', 0.95);
+          const max = designerNumber('max_shift', 2.05);
+          const m = (max - base) / (4096 - 1024);
+          mu = seq * m + (base - m * 1024);
+        } else {
+          const m200 = 0.00016927 * seq + 0.45666666;
+          const m10 = 8.73809524e-05 * seq + 1.89833333;
+          const a = (m200 - m10) / 190;
+          mu = seq > 4300 ? m200 : a * steps + (m200 - 200 * a);
+        }
+        for (let i = 0; i < steps; i++) {
+          const t = 1 - i / steps;
+          out.push(t <= 0 ? 0 : fluxTimeShift(mu, t));
+        }
+        if (kind === 'ltx2' && designerBool('stretch', true) && out.length > 1) {
+          const terminal = Math.min(0.99, Math.max(0, designerNumber('terminal', 0.1)));
+          const last = out[out.length - 1];
+          const scale = (1 - last) / (1 - terminal);
+          if (scale > 1e-8) {
+            for (let i = 0; i < out.length; i++) out[i] = 1 - (1 - out[i]) / scale;
+          }
+        }
+      } else if (kind === 'kl_optimal') {
+        const aMin = Math.atan(Math.max(SIGMA_MIN, 1e-6));
+        const aMax = Math.atan(SIGMA_MAX);
+        for (let i = 0; i < steps; i++) {
+          const u = steps === 1 ? 0 : i / (steps - 1);
+          out.push(Math.tan(u * aMin + (1 - u) * aMax));
+        }
+      } else if (kind === 'smoothstep') {
+        for (let i = 0; i < steps; i++) {
+          let u = 1 - i / steps;
+          u = u * u * (3 - 2 * u);
+          out.push(tToSigma(Math.round(u * 999)));
+        }
+      } else if (kind === 'beta') {
+        const alpha = Math.max(0.05, designerNumber('alpha', 0.6));
+        const beta = Math.max(0.05, designerNumber('beta', 0.6));
+        for (let i = 0; i < steps; i++) {
+          const u = 1 - i / steps;
+          const warped = Math.pow(u, beta / alpha) / (Math.pow(u, beta / alpha) + Math.pow(Math.max(1 - u, 1e-6), alpha / beta));
+          out.push(tToSigma(Math.round(Math.min(1, Math.max(0, warped)) * 999)));
+        }
+      } else if (kind === 'logit_normal') {
+        let mu = designerNumber('mu', 0);
+        const std = Math.max(0.05, designerNumber('std', 1.75));
+        if (designerBool('resolution_aware', true)) mu += 0.5 * Math.log(seq / ((512 * 512) / (16 * 16)));
+        const tHi = sigmoid(0.5 * designerNumber('logsnr_max', 18));
+        const tLo = sigmoid(0.5 * designerNumber('logsnr_min', -15));
+        for (let i = 0; i < steps; i++) {
+          const t = steps === 1 ? 0.5 : i / steps;
+          let y = sigmoid(mu + std * (-normsinv(Math.min(0.999, Math.max(0.001, t)))));
+          y = Math.min(tHi, Math.max(tLo, y));
+          out.push(y);
+        }
+      } else if (kind === 'lcm') {
+        const original = 50;
+        const k = 1000 / original;
+        for (let i = 0; i < steps; i++) {
+          const index = Math.floor((i * original) / steps);
+          const timestep = (original - index) * k - 1;
+          out.push(tToSigma(timestep));
+        }
+      } else if (kind === 'simple' || kind === 'sgm_uniform' || kind === 'discrete') {
+        for (let i = 0; i < steps; i++) {
+          const u = steps === 1 ? 0 : i / (kind === 'discrete' ? (steps - 1) : steps);
+          out.push(tToSigma(Math.round((1 - u) * 999)));
+        }
+      } else {
+        for (let i = 0; i < steps; i++) {
+          const u = steps === 1 ? 0 : i / (steps - 1);
+          out.push(lerp(SIGMA_MAX, SIGMA_MIN, u));
+        }
+      }
+      return out;
+    }
+
+    function designerExtraArgs() {
+      const kind = document.getElementById('designerFormula').value;
+      const fields = DESIGNER_FIELDS[kind] || [];
+      return fields.map(field => {
+        if (field.type === 'bool') return field.key + '=' + (designerBool(field.key, field.value) ? 'true' : 'false');
+        return field.key + '=' + designerNumber(field.key, field.value);
+      }).join(',');
+    }
+
+    let connectedModel = '';
+
+    function defaultScheduleKind() {
+      const sampler = document.getElementById('sampler').value;
+      if (sampler === 'lcm') return 'lcm';
+      if (sampler === 'ddim_trailing') return 'simple';
+      const name = connectedModel.toLowerCase();
+      if (name.includes('flux2') || name.includes('flux.2') || name.includes('flux-2')) return 'flux2';
+      if (name.includes('flux')) return 'flux';
+      if (name.includes('ltx')) return 'ltx2';
+      return 'discrete';
+    }
+
+    function activeScheduleKind() {
+      const selected = document.getElementById('scheduler').value;
+      if (selected === DESIGNER_SENTINEL) {
+        return document.getElementById('designerFormula').value || 'simple';
+      }
+      if (selected) return selected;
+      return defaultScheduleKind();
+    }
+
+    function skippedDenoiseSteps(steps, strength) {
+      if (!(strength < 1)) return 0;
+      let tEnc = Math.floor(steps * strength);
+      if (tEnc === steps) tEnc--;
+      if (tEnc < 0) tEnc = 0;
+      return Math.max(0, Math.min(steps, steps - tEnc - 1));
+    }
+
+    function drawScheduleChart() {
+      const canvas = document.getElementById('scheduleChart');
+      if (!canvas) return;
+      const cssW = Math.max(1, Math.round(canvas.clientWidth || 360));
+      const cssH = Math.max(1, Math.round(canvas.clientHeight || 160));
+      if (canvas.width !== cssW) canvas.width = cssW;
+      if (canvas.height !== cssH) canvas.height = cssH;
+      const ctx = softwareCtx(canvas);
+      const w = cssW;
+      const h = cssH;
+      ctx.fillStyle = '#11141c';
+      ctx.fillRect(0, 0, w, h);
+      const runningSchedule = currentJob && jobSchedule;
+      const steps = runningSchedule
+        ? jobSchedule.requested
+        : (Number(document.getElementById('stepsNum').value) || 20);
+      const kind = activeScheduleKind();
+      const sigmas = previewSigmas(kind, steps);
+      const maxS = Math.max(...sigmas, 1e-6);
+      const left = 8;
+      const right = w - 8;
+      const top = 8;
+      const bottom = h - 8;
+      const n = Math.max(1, sigmas.length);
+      const barW = (right - left) / n;
+      const strength = Number(document.getElementById('i2iStrengthNum').value);
+      const skipped = runningSchedule
+        ? jobSchedule.skipped
+        : (isI2i() ? skippedDenoiseSteps(n, strength) : 0);
+      const samplerStep = Number(liveSamplerStep);
+      const highlight = runningSchedule && samplerStep > 0 ? skipped + samplerStep - 1 : -1;
+      sigmas.forEach((s, i) => {
+        const bh = (s / maxS) * (bottom - top);
+        const x = left + i * barW;
+        const y = bottom - bh;
+        const dropped = i < skipped;
+        const active = i === highlight;
+        ctx.fillStyle = dropped
+          ? (i % 2 ? 'rgba(248,113,113,0.72)' : 'rgba(239,68,68,0.95)')
+          : active
+            ? 'rgba(251, 191, 36, 0.95)'
+            : (i % 2 ? 'rgba(129,140,248,0.55)' : 'rgba(99,102,241,0.85)');
+        ctx.beginPath();
+        ctx.rect(x + 0.5, y, Math.max(1, barW - 1), bh);
+        ctx.fill();
+        ctx.strokeStyle = dropped ? '#fecaca' : (active ? '#fef3c7' : '#c7d2fe');
+        ctx.lineWidth = active ? 2 : 1;
+        ctx.stroke();
+      });
+    }
+
+    let i2iSource = null;
+    let i2iSourceUrl = null;
+
+    function isI2i() {
+      return document.getElementById('genMode').value === 'i2i';
+    }
+
+    function i2iDim() {
+      const picked = document.querySelector('input[name="i2iDim"]:checked');
+      return picked ? picked.value : 'source';
+    }
+
+    function round64(n) {
+      return Math.max(64, Math.round(n / 64) * 64);
+    }
+
+    function reflectCoord(v, size) {
+      if (size <= 1) return 0;
+      let x = v;
+      while (x < 0 || x >= size) {
+        if (x < 0) x = -x - 1;
+        else x = size * 2 - x - 1;
+      }
+      return x;
+    }
+
+    function paintI2i(ctx, img, w, h, mode) {
+      const iw = img.naturalWidth;
+      const ih = img.naturalHeight;
+      if (mode === 'stretch' || mode === 'source') {
+        ctx.drawImage(img, 0, 0, w, h);
+        return;
+      }
+      if (mode === 'fill') {
+        const scale = Math.max(w / iw, h / ih);
+        const dw = iw * scale;
+        const dh = ih * scale;
+        ctx.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+        return;
+      }
+      const scale = Math.min(w / iw, h / ih);
+      const dw = Math.max(1, Math.round(iw * scale));
+      const dh = Math.max(1, Math.round(ih * scale));
+      const ox = Math.floor((w - dw) / 2);
+      const oy = Math.floor((h - dh) / 2);
+      if (mode !== 'fit-tile') {
+        ctx.fillStyle = mode === 'fit-white' ? '#ffffff' : mode === 'fit-black' ? '#000000' : 'rgb(128,128,128)';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, ox, oy, dw, dh);
+        return;
+      }
+      const fitted = document.createElement('canvas');
+      fitted.width = dw;
+      fitted.height = dh;
+      const fittedCtx = softwareCtx(fitted);
+      fittedCtx.drawImage(img, 0, 0, dw, dh);
+      const src = fittedCtx.getImageData(0, 0, dw, dh).data;
+      const out = ctx.createImageData(w, h);
+      for (let y = 0; y < h; y++) {
+        const sy = reflectCoord(y - oy, dh);
+        for (let x = 0; x < w; x++) {
+          const sx = reflectCoord(x - ox, dw);
+          const si = (sy * dw + sx) * 4;
+          const di = (y * w + x) * 4;
+          out.data[di] = src[si];
+          out.data[di + 1] = src[si + 1];
+          out.data[di + 2] = src[si + 2];
+          out.data[di + 3] = 255;
+        }
+      }
+      ctx.putImageData(out, 0, 0);
+    }
+
+    function composeI2iCanvas() {
+      const img = i2iSource;
+      if (!img || !img.naturalWidth) {
+        updateI2iPreview();
+        return null;
+      }
+      const mode = i2iDim();
+      let w = Number(document.getElementById('width').value) || 512;
+      let h = Number(document.getElementById('height').value) || 512;
+      if (mode === 'source') {
+        w = round64(img.naturalWidth);
+        h = round64(img.naturalHeight);
+        document.getElementById('width').value = String(w);
+        document.getElementById('height').value = String(h);
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      paintI2i(softwareCtx(canvas), img, w, h, mode);
+      updateI2iPreview();
+      return canvas;
+    }
+
+    function i2iOutputSize() {
+      const mode = i2iDim();
+      if (mode === 'source' && i2iSource && i2iSource.naturalWidth) {
+        return {
+          w: Math.max(1, i2iSource.naturalWidth),
+          h: Math.max(1, i2iSource.naturalHeight),
+        };
+      }
+      return {
+        w: Math.max(1, Number(document.getElementById('width').value) || 512),
+        h: Math.max(1, Number(document.getElementById('height').value) || 512),
+      };
+    }
+
+    function i2iPreviewBox(w, h) {
+      const panel = document.getElementById('i2iPanel');
+      const style = panel ? getComputedStyle(panel) : null;
+      const pad = style
+        ? (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
+        : 0;
+      const inner = panel && panel.clientWidth > pad + 64
+        ? panel.clientWidth - pad
+        : 360;
+      const maxW = Math.max(160, Math.floor(inner));
+      const scale = Math.min(maxW / w, maxW / h);
+      const cssW = Math.max(1, Math.round(w * scale));
+      const cssH = Math.max(1, Math.round(h * scale));
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      return {
+        cssW,
+        cssH,
+        bufW: Math.max(1, Math.round(cssW * dpr)),
+        bufH: Math.max(1, Math.round(cssH * dpr)),
+      };
+    }
+
+    function updateI2iPreview() {
+      if (!isI2i()) return;
+      const canvas = document.getElementById('i2iPreview');
+      if (!canvas) return;
+      const size = i2iOutputSize();
+      const box = i2iPreviewBox(size.w, size.h);
+      canvas.style.width = box.cssW + 'px';
+      canvas.style.height = box.cssH + 'px';
+      if (canvas.width !== box.bufW) canvas.width = box.bufW;
+      if (canvas.height !== box.bufH) canvas.height = box.bufH;
+      const ctx = softwareCtx(canvas);
+      const img = i2iSource;
+      if (!img || !img.naturalWidth) {
+        ctx.fillStyle = '#11141c';
+        ctx.fillRect(0, 0, box.bufW, box.bufH);
+        return;
+      }
+      const mode = i2iDim();
+      paintI2i(ctx, img, box.bufW, box.bufH, mode === 'source' ? 'stretch' : mode);
+    }
+
+    function setI2iSource(img) {
+      i2iSource = img;
+      syncI2i();
+      updateI2iPreview();
+      persistSession();
+    }
+
+    function rememberI2iSource(img, url) {
+      if (i2iSourceUrl && i2iSourceUrl !== url) URL.revokeObjectURL(i2iSourceUrl);
+      i2iSourceUrl = url || null;
+      setI2iSource(img);
+    }
+
+    function loadI2iFile(file) {
+      if (!file) return;
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => rememberI2iSource(img, url);
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        document.getElementById('status').innerText = 'Could not read that file';
+      };
+      img.src = url;
+    }
+
+    async function useShownForI2i() {
+      await apiBaseReady;
+      const shown = document.querySelector('#gallery img');
+      const name = shown && shown.dataset.name;
+      const src = name
+        ? (studioBase + '/files/' + encodeURIComponent(name))
+        : (shown && shown.src);
+      if (!src) {
+        document.getElementById('status').innerText = 'No image is shown';
+        return;
+      }
+      try {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const url = URL.createObjectURL(await res.blob());
+        const img = new Image();
+        img.onload = () => rememberI2iSource(img, url);
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          document.getElementById('status').innerText = 'Could not read the shown image';
+        };
+        img.src = url;
+      } catch (err) {
+        document.getElementById('status').innerText = 'Could not read the shown image';
+        dlog('use shown failed: ' + (err && err.message ? err.message : err));
+      }
+    }
+
+    function canvasToPngDataUrl(canvas) {
+      return new Promise((resolve, reject) => {
+        let blob = null;
+        try {
+          canvas.toBlob(out => {
+            blob = out;
+            if (!blob) {
+              reject(new Error('canvas is unreadable'));
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(reader.error || new Error('read failed'));
+            reader.readAsDataURL(blob);
+          }, 'image/png');
+        } catch (err) {
+          reject(err);
+        }
+      });
+    }
+
+    function syncI2i() {
+      const panel = document.getElementById('i2iPanel');
+      const on = isI2i();
+      panel.hidden = !on;
+      document.getElementById('genBtn').disabled = on && !i2iSource;
+      if (on) updateI2iPreview();
+      drawScheduleChart();
+      persistSession();
+    }
+
+    function collectPayload() {
+      const i2i = isI2i();
+      const enableHr = !i2i && document.getElementById('enableHr').checked;
       const seedVal = Number(document.getElementById('seed').value);
-
       const payload = {
         prompt: document.getElementById('prompt').value,
         negative_prompt: document.getElementById('negPrompt').value,
@@ -312,53 +1859,519 @@
         batch_size: Number(document.getElementById('batchSize').value),
         sampler_name: document.getElementById('sampler').value,
         clip_skip: Number(document.getElementById('clipSkip').value),
-
-        // High-res fix parameters
         enable_hr: enableHr,
         hr_scale: enableHr ? Number(document.getElementById('hrScale').value) : 1.0,
         hr_steps: enableHr ? Number(document.getElementById('hrSteps').value) : 0,
-        denoising_strength: enableHr ? Number(document.getElementById('hrDenoiseNum').value) : 0.7
+        denoising_strength: i2i
+          ? Number(document.getElementById('i2iStrengthNum').value)
+          : (enableHr ? Number(document.getElementById('hrDenoiseNum').value) : 0.7),
+        i2i,
+        send_images: false
       };
+      if (designerEnabled()) {
+        payload.scheduler = document.getElementById('designerFormula').value;
+        const extra = designerExtraArgs();
+        if (extra) payload.extra_sample_args = extra;
+      } else {
+        const scheduler = document.getElementById('scheduler').value;
+        if (scheduler && scheduler !== DESIGNER_SENTINEL) payload.scheduler = scheduler;
+      }
+      payload.nag_prompt = document.getElementById('nagPrompt').value;
+      const nagScale = Number(document.getElementById('nagScale').value);
+      if (nagScale > 1) {
+        const nagNumber = (id) => {
+          const value = Number(document.getElementById(id).value);
+          return Number.isFinite(value) ? value : 0;
+        };
+        const nagExtra = [
+          'nag_scale=' + nagScale,
+          'nag_tau=' + nagNumber('nagTau'),
+          'nag_alpha=' + nagNumber('nagAlpha'),
+          'nag_sigma_end=' + nagNumber('nagSigmaEnd')
+        ].join(',');
+        payload.extra_sample_args = payload.extra_sample_args
+          ? payload.extra_sample_args + ',' + nagExtra
+          : nagExtra;
+      }
+      return payload;
+    }
 
-      const scheduler = document.getElementById('scheduler').value;
-      if (scheduler) payload.scheduler = scheduler;
+    function renderQueue() {
+      const list = document.getElementById('queueList');
+      list.innerHTML = '';
+      const rows = [];
+      if (currentJob) rows.push({ job: currentJob, running: true });
+      pendingJobs.forEach(job => rows.push({ job, running: false }));
+      if (!rows.length) {
+        const empty = document.createElement('div');
+        empty.className = 'queue-empty';
+        empty.textContent = 'Queue empty';
+        list.appendChild(empty);
+        return;
+      }
+      rows.forEach(({ job, running }) => {
+        const row = document.createElement('div');
+        row.className = 'queue-item';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.readOnly = true;
+        const preparing = job.preparing ? 'Preparing i2i… ' : '';
+        input.value = (running ? '▶ ' : '') + preparing + (job.payload.prompt || '(empty prompt)');
+        input.title = job.payload.prompt;
+        row.appendChild(input);
+        if (!running) {
+          const x = document.createElement('button');
+          x.type = 'button';
+          x.className = 'btn-secondary queue-x';
+          x.textContent = 'x';
+          x.title = 'Remove from queue';
+          x.onclick = () => {
+            void cancelServerJob(job.id);
+          };
+          row.appendChild(x);
+        }
+        list.appendChild(row);
+      });
+    }
 
-      try {
-        const res = await fetch('http://127.0.0.1:1493/sdapi/v1/txt2img', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
+    function setCancelEnabled(on) {
+      document.getElementById('cancelBtn').disabled = !on;
+    }
 
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+    function outputThumbLabel(name) {
+      const stamp = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})/.exec(name);
+      if (stamp) return stamp[4] + ':' + stamp[5] + ':' + stamp[6];
+      return name.replace(/\.[^.]+$/, '').slice(-8);
+    }
 
-        // Clear previous outputs
+    function studioThumbUrl(file) {
+      if (file && file.thumb) return studioBase + file.thumb;
+      const stem = String(file && file.name ? file.name : file).replace(/\.png$/i, '');
+      return studioBase + '/thumbs/' + encodeURIComponent(stem) + '.jpg';
+    }
+
+    function syncStripThumbs(files) {
+      const byName = new Map(files.map(file => [file.name, file]));
+      document.querySelectorAll('#browser button').forEach(btn => {
+        const file = byName.get(btn.dataset.name);
+        const label = btn.querySelector('.thumb-label');
+        let img = btn.querySelector('img');
+        if (!file || !file.ready) {
+          if (img) img.remove();
+          if (label) label.hidden = false;
+          return;
+        }
+        const url = studioThumbUrl(file);
+        if (!img) {
+          img = document.createElement('img');
+          img.alt = file.name;
+          img.draggable = false;
+          btn.appendChild(img);
+        }
+        if (img.getAttribute('src') !== url) img.src = url;
+        if (label) label.hidden = true;
+      });
+    }
+
+    let galleryGen = 0;
+
+    function showOutput(name) {
+      selectedOutput = name;
+      document.querySelectorAll('#browser button').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.name === name);
+      });
+      const gallery = document.getElementById('gallery');
+      let img = gallery.querySelector('img');
+      const fileUrl = studioBase + '/files/' + encodeURIComponent(name);
+      if (img && img.dataset.name === name && img.getAttribute('src') === fileUrl) return;
+      const token = ++galleryGen;
+      if (!img) {
         gallery.innerHTML = '';
+        img = document.createElement('img');
+        gallery.appendChild(img);
+      }
+      img.alt = name;
+      img.dataset.name = name;
+      img.onload = () => {
+        if (token !== galleryGen) return;
+        dlog('gallery ' + name + ' shown ' + img.naturalWidth + 'x' + img.naturalHeight);
+      };
+      img.onerror = () => {
+        if (token !== galleryGen) return;
+        dlog('gallery failed ' + name);
+      };
+      img.src = fileUrl;
+    }
 
-        // Render images returned in batch
-        data.images.forEach(b64 => {
-          const img = document.createElement('img');
-          img.src = 'data:image/png;base64,' + b64;
-          gallery.appendChild(img);
-        });
+    let lastStripNames = '';
 
-        const usedSampler = (data.parameters && data.parameters.sampler_name) || payload.sampler_name;
-        let infoSampler = usedSampler;
-        try {
-          if (data.info) {
-            const info = typeof data.info === 'string' ? JSON.parse(data.info) : data.info;
-            if (info && info.sampler_name) infoSampler = info.sampler_name;
-          }
-        } catch (e) { /* keep usedSampler */ }
-        status.innerText = `Done! Seed: ${payload.seed}  Sampler: ${infoSampler}`;
+    async function refreshBrowser(selectName) {
+      const browser = document.getElementById('browser');
+      try {
+        const res = await fetch(studioBase + '/outputs', { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const files = data.files || [];
+        if (!files.length) {
+          lastStripNames = '';
+          browser.innerHTML = '';
+          const empty = document.createElement('div');
+          empty.className = 'browser-empty';
+          empty.textContent = 'No outputs yet';
+          browser.appendChild(empty);
+          return;
+        }
+        browser.dataset.newest = files[0].name;
+        const names = files.map(file => file.name).join('|');
+        if (names !== lastStripNames) {
+          lastStripNames = names;
+          dlog('refresh browser ' + files.length + ' files' + (selectName ? ', select ' + selectName : ''));
+          browser.innerHTML = '';
+          files.forEach(file => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.dataset.name = file.name;
+            btn.title = file.name;
+            btn.classList.toggle('active', file.name === selectedOutput);
+            const label = document.createElement('span');
+            label.className = 'thumb-label';
+            label.textContent = outputThumbLabel(file.name);
+            btn.appendChild(label);
+            btn.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              autoShowResult = false;
+              showOutput(file.name);
+            });
+            browser.appendChild(btn);
+          });
+        }
+        syncStripThumbs(files);
+        if (selectName) {
+          showOutput(selectName);
+        } else if (!currentJob && !document.querySelector('#gallery img') && files[0]) {
+          showOutput(files[0].name);
+        }
       } catch (err) {
-        status.innerText = "Error: " + err.message + " (Check terminal/CORS)";
-        console.error(err);
-      } finally {
-        btn.disabled = false;
+        lastStripNames = '';
+        browser.innerHTML = '';
+        const empty = document.createElement('div');
+        empty.className = 'browser-empty';
+        empty.textContent = 'Outputs unavailable';
+        browser.appendChild(empty);
       }
     }
+
+    function jobFromServer(view) {
+      if (!view || !view.id) return null;
+      return {
+        id: view.id,
+        payload: { prompt: view.prompt || '' },
+        server: true,
+        i2i: !!view.i2i,
+      };
+    }
+
+    let seenFinishedId = null;
+    let lastLoggedStep = null;
+    let pollBusy = false;
+    let serverReachable = null;
+    let pollDelay = 800;
+    let pollTimer = null;
+    const POLL_OK = 800;
+    const POLL_DOWN_MIN = 2500;
+    const POLL_DOWN_MAX = 15000;
+
+    function schedulePoll(ms) {
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = setTimeout(() => { void pollServerQueue(); }, ms);
+    }
+
+    function markUnreachable(err) {
+      if (serverReachable !== false) {
+        dlog('sd-server unreachable' + (err ? ': ' + err : ''));
+        setStatusText('Cannot reach sd-server at ' + apiBase, false);
+        currentJob = null;
+        pendingJobs = [];
+        setCancelEnabled(false);
+        setLivePreviewStatus('Idle', false);
+        renderQueue();
+        pollDelay = POLL_DOWN_MIN;
+      } else {
+        pollDelay = Math.min(POLL_DOWN_MAX, pollDelay * 2);
+      }
+      serverReachable = false;
+    }
+
+    function applyServerQueue(data) {
+      const running = data && data.running;
+      const pending = (data && data.pending) || [];
+      pendingJobs = pending.map(jobFromServer).filter(Boolean);
+      const wasRunning = currentJob;
+      currentJob = running ? jobFromServer(running) : null;
+      setCancelEnabled(!!currentJob);
+      const step = data && data.step != null ? data.step : (running && running.step);
+      const steps = data && data.steps ? data.steps : (running && running.steps);
+      const finishedEarly = data && data.last_finished;
+      const canceledFinish = finishedEarly
+        && finishedEarly.status === 'cancelled'
+        && wasRunning
+        && finishedEarly.id === wasRunning.id;
+      if (currentJob) {
+        if (cancelArmedId && cancelArmedId !== currentJob.id) cancelArmedId = null;
+        if (!wasRunning || wasRunning.id !== currentJob.id) {
+          takeJobSchedule();
+          previewShownKey = null;
+          previewWantKey = null;
+          lastLoggedStep = null;
+          dlog('attached running job ' + currentJob.id);
+        }
+        if (cancelArmedId === currentJob.id) {
+          setStatusText('Canceled', false);
+        } else {
+          showLivePreview(step, steps, !!(data && data.has_preview));
+          const label = scheduleLabel(liveSamplerStep, liveSamplerSteps);
+          if (label !== lastLoggedStep) {
+            lastLoggedStep = label;
+            if (label !== 'starting') dlog(label);
+          }
+        }
+      } else {
+        previewWantKey = null;
+        previewShownKey = null;
+        liveSamplerStep = 0;
+        liveSamplerSteps = 0;
+        lastLoggedStep = null;
+        if (!pendingJobs.length) scheduleQueue.length = 0;
+        if (wasRunning) {
+          const canceled = cancelArmedId === wasRunning.id || canceledFinish;
+          jobSchedule = null;
+          cancelArmedId = null;
+          setLivePreviewStatus('Idle', false);
+          setStatusText(canceled ? 'Canceled' : 'Idle', false);
+          drawScheduleChart();
+        }
+      }
+
+      const finished = data && data.last_finished;
+      if (finished && finished.id) {
+        if (seenFinishedId === null) {
+          seenFinishedId = finished.id;
+        } else if (finished.id !== seenFinishedId) {
+          seenFinishedId = finished.id;
+          const files = finished.output_files || [];
+          const newest = files.length ? String(files[0]).split(/[\\/]/).pop() : null;
+          if (finished.status === 'cancelled') {
+            setStatusText('Canceled', false);
+            dlog('job cancelled ' + finished.id);
+          } else if (finished.status === 'failed') {
+            setStatusText('Error: generation failed', false);
+            dlog('job failed ' + finished.id);
+          } else {
+            const savedText = newest ? ('  Saved: ' + newest) : '';
+            setStatusText('Done!' + savedText, false);
+            dlog('job done ' + finished.id + savedText);
+            if (autoShowResult && newest) {
+              selectedOutput = newest;
+              void refreshBrowser(newest);
+            } else {
+              void refreshBrowser();
+            }
+          }
+        }
+      }
+      renderQueue();
+    }
+
+    async function pollServerQueue() {
+      if (pollBusy) {
+        schedulePoll(pollDelay);
+        return;
+      }
+      pollBusy = true;
+      try {
+        const ac = new AbortController();
+        const kill = setTimeout(() => ac.abort(), 4000);
+        let res;
+        try {
+          res = await fetch(apiBase + '/sdapi/v1/queue', { cache: 'no-store', signal: ac.signal });
+        } finally {
+          clearTimeout(kill);
+        }
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const wasDown = serverReachable !== true;
+        serverReachable = true;
+        pollDelay = POLL_OK;
+        if (wasDown) {
+          seenFinishedId = null;
+          const model = await pingServer();
+          setStatusText(model ? ('Connected · ' + model) : 'Idle', false);
+        }
+        applyServerQueue(data);
+      } catch (e) {
+        markUnreachable(e && e.message ? e.message : e);
+      } finally {
+        pollBusy = false;
+        schedulePoll(pollDelay);
+      }
+    }
+
+    async function cancelServerJob(id) {
+      try {
+        const res = await fetch(apiBase + '/sdapi/v1/queue/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(id ? { id: String(id) } : {}),
+        });
+        void pollServerQueue();
+        return res.ok;
+      } catch (e) {
+        dlog('cancel request failed: ' + (e && e.message ? e.message : e));
+        void pollServerQueue();
+        return false;
+      }
+    }
+
+    async function enqueueGenerate() {
+      const status = document.getElementById('status');
+      const payload = collectPayload();
+      try {
+        if (payload.i2i) {
+          const canvas = composeI2iCanvas();
+          if (!canvas) {
+            status.innerText = 'Choose an image for i2i';
+            return;
+          }
+          setStatusText('Preparing i2i…', false);
+          await new Promise(resolve => setTimeout(resolve, 0));
+          payload.init_images = [await canvasToPngDataUrl(canvas)];
+          payload.width = canvas.width;
+          payload.height = canvas.height;
+        }
+        const res = await fetch(apiBase + '/sdapi/v1/queue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        let data = {};
+        try { data = await res.json(); } catch (e) { data = {}; }
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        rememberQueuedSchedule(payload);
+        autoShowResult = true;
+        dlog('queued ' + (data.id || '') + ' ' + payload.width + 'x' + payload.height + ' steps=' + payload.steps);
+        setStatusText(data.status === 'generating' ? 'starting' : 'Queued', data.status === 'generating');
+        void pollServerQueue();
+      } catch (err) {
+        setStatusText('Could not queue: ' + (err && err.message ? err.message : err), false);
+        dlog('queue failed: ' + (err && err.message ? err.message : err));
+      }
+    }
+
+    async function cancelCurrent() {
+      if (!currentJob) return;
+      const id = currentJob.id;
+      cancelArmedId = id;
+      setStatusText('Canceled', false);
+      dlog('cancel posted');
+      const ok = await cancelServerJob(id);
+      if (!ok && cancelArmedId === id) cancelArmedId = null;
+    }
+
+    function bindPromptKeys(id) {
+      document.getElementById(id).addEventListener('keydown', (ev) => {
+        if ((ev.ctrlKey || ev.metaKey) && ev.key === 'Enter') {
+          ev.preventDefault();
+          enqueueGenerate();
+        }
+      });
+    }
+
+    function installSteppers(root) {
+      (root || document).querySelectorAll('input[type="number"]').forEach(input => {
+        if (input.dataset.stepper) return;
+        input.dataset.stepper = '1';
+        const wrap = document.createElement('span');
+        wrap.className = 'stepper';
+        input.parentNode.insertBefore(wrap, input);
+        const minus = document.createElement('button');
+        minus.type = 'button';
+        minus.className = 'stepper-btn';
+        minus.textContent = '−';
+        minus.title = 'Decrease';
+        const plus = document.createElement('button');
+        plus.type = 'button';
+        plus.className = 'stepper-btn';
+        plus.textContent = '+';
+        plus.title = 'Increase';
+        wrap.append(minus, input, plus);
+        const bump = (dir) => {
+          const step = Number(input.step);
+          const delta = Number.isFinite(step) && step > 0 ? step : 1;
+          const min = input.min === '' ? -Infinity : Number(input.min);
+          const max = input.max === '' ? Infinity : Number(input.max);
+          let value = Number(input.value);
+          if (!Number.isFinite(value)) value = 0;
+          value = Math.min(max, Math.max(min, value + dir * delta));
+          const places = (String(delta).split('.')[1] || '').length;
+          input.value = places ? String(Number(value.toFixed(places))) : String(value);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        };
+        minus.addEventListener('click', () => bump(-1));
+        plus.addEventListener('click', () => bump(1));
+      });
+    }
+
+    bindPromptKeys('prompt');
+    bindPromptKeys('negPrompt');
+    bindPromptKeys('nagPrompt');
+    const controls = document.querySelector('.controls');
+    controls.addEventListener('input', (ev) => {
+      persistSession();
+      drawScheduleChart();
+      const id = ev.target && ev.target.id;
+      if (isI2i() && (id === 'width' || id === 'height')) updateI2iPreview();
+    });
+    controls.addEventListener('change', () => {
+      persistSession();
+      drawScheduleChart();
+    });
+    restoreClientLog();
+    dlog((clientLogLines.length ? 'page load, restored prior log' : 'page load') + ' ' + location.origin);
+    dlog('api ' + apiBase);
+    dlog('studio ' + studioBase);
+    document.getElementById('i2iFile').addEventListener('change', (ev) => {
+      const file = ev.target.files && ev.target.files[0];
+      loadI2iFile(file);
+    });
+    restoreSession();
+    syncI2i();
+    syncDesigner();
+    document.getElementById('saveSettingsOverlay').addEventListener('click', (ev) => {
+      if (ev.target === ev.currentTarget) cancelSaveSettings();
+    });
+    document.addEventListener('keydown', (ev) => {
+      const overlay = document.getElementById('saveSettingsOverlay');
+      if (!overlay || overlay.hidden) return;
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        cancelSaveSettings();
+      } else if (ev.key === 'Enter') {
+        ev.preventDefault();
+        void confirmSaveSettings();
+      }
+    });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) void pullPreview();
+    });
+    void refreshSavedSettings();
+    installSteppers(document);
+    renderQueue();
+    void (async () => {
+      await refreshBrowser();
+      await pollServerQueue();
+    })();
+    setInterval(() => { void refreshBrowser(); }, 2000);
   </script>
 </body>
 </html>

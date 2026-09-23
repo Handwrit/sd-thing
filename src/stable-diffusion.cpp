@@ -137,6 +137,7 @@ const char* scheduler_to_str[] = {
     "flux2",
     "flux",
     "beta",
+    "tangent",
 };
 
 static_assert(SCHEDULER_COUNT == sizeof(scheduler_to_str) / sizeof(scheduler_to_str[0]),
@@ -513,6 +514,7 @@ void sd_img_gen_params_init(sd_img_gen_params_t* sd_img_gen_params) {
     sd_img_gen_params->qwen_image_layers   = 3;
     sd_img_gen_params->circular_x          = false;
     sd_img_gen_params->circular_y          = false;
+    sd_img_gen_params->nag_prompt          = nullptr;
     sd_img_gen_params->pm_params           = {nullptr, 0, nullptr, 20.f};
     sd_img_gen_params->pulid_params        = {nullptr, 1.0f};
     sd_img_gen_params->vae_tiling_params   = {false, false, 0, 0, 0.5f, 0.0f, 0.0f, nullptr};
@@ -547,6 +549,7 @@ char* sd_img_gen_params_to_str(const sd_img_gen_params_t* sd_img_gen_params) {
              "VAE tiling: %s (temporal=%s, extra_tiling_args=%s)\n"
              "circular_x: %s\n"
              "circular_y: %s\n"
+             "nag_prompt: %s\n"
              "hires: {enabled=%s, upscaler=%s, model_path=%s, scale=%.2f, target=%dx%d, steps=%d, denoising_strength=%.2f}\n",
              SAFE_STR(sd_img_gen_params->prompt),
              SAFE_STR(sd_img_gen_params->negative_prompt),
@@ -569,6 +572,7 @@ char* sd_img_gen_params_to_str(const sd_img_gen_params_t* sd_img_gen_params) {
              SAFE_STR(sd_img_gen_params->vae_tiling_params.extra_tiling_args),
              BOOL_STR(sd_img_gen_params->circular_x),
              BOOL_STR(sd_img_gen_params->circular_y),
+             SAFE_STR(sd_img_gen_params->nag_prompt),
              BOOL_STR(sd_img_gen_params->hires.enabled),
              sd_hires_upscaler_name(sd_img_gen_params->hires.upscaler),
              SAFE_STR(sd_img_gen_params->hires.model_path),

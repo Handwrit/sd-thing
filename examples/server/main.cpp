@@ -101,6 +101,8 @@ int main(int argc, const char** argv) {
     std::vector<UpscalerEntry> upscaler_cache;
     std::mutex upscaler_mutex;
     AsyncJobManager async_job_manager;
+    PreviewState preview_state;
+    GenerationStatus generation_status;
     ServerRuntime runtime = {
         sd_ctx.get(),
         &sd_ctx_mutex,
@@ -112,7 +114,12 @@ int main(int argc, const char** argv) {
         &upscaler_cache,
         &upscaler_mutex,
         &async_job_manager,
+        &preview_state,
+        &generation_status,
     };
+
+    sd_set_preview_callback(server_preview_callback, PREVIEW_PROJ, 1, true, false, &preview_state);
+    sd_set_progress_callback(server_progress_callback, &preview_state);
 
     std::thread async_worker(async_job_worker, std::ref(runtime));
 
@@ -127,6 +134,7 @@ int main(int argc, const char** argv) {
         res.set_header("Access-Control-Allow-Credentials", "true");
         res.set_header("Access-Control-Allow-Methods", "*");
         res.set_header("Access-Control-Allow-Headers", "*");
+        res.set_header("Access-Control-Expose-Headers", "X-SD-Step, X-SD-Steps");
 
         if (req.method == "OPTIONS") {
             res.status = 204;
@@ -141,7 +149,7 @@ int main(int argc, const char** argv) {
 #else
     index_html = "Stable Diffusion Server is running";
 #endif
-    register_index_endpoints(svr, svr_params, index_html);
+    register_index_endpoints(svr, runtime, index_html);
     register_openai_api_endpoints(svr, runtime);
     register_sdapi_endpoints(svr, runtime);
     register_sdcpp_api_endpoints(svr, runtime);

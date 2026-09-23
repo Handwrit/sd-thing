@@ -64,6 +64,43 @@ namespace sd::guidance {
         return uncond;
     }
 
+    static bool parse_nag_float(const std::string& key, const std::string& value, float& out) {
+        if (!parse_strict_float(value, out)) {
+            LOG_WARN("ignoring invalid NAG extra sample arg '%s=%s'", key.c_str(), value.c_str());
+            return false;
+        }
+        return true;
+    }
+
+    NormalizedAttentionGuidanceParams parse_normalized_attention_guidance_args(const char* extra_sample_args) {
+        NormalizedAttentionGuidanceParams params;
+        for (const auto& [key, value] : parse_key_value_args(extra_sample_args, "extra sample arg")) {
+            float parsed = 0.0f;
+            if (key == "nag_scale") {
+                if (parse_nag_float(key, value, parsed)) {
+                    params.scale = parsed;
+                }
+            } else if (key == "nag_tau") {
+                if (parse_nag_float(key, value, parsed)) {
+                    params.tau = parsed;
+                }
+            } else if (key == "nag_alpha") {
+                if (parse_nag_float(key, value, parsed)) {
+                    params.alpha = parsed;
+                }
+            } else if (key == "nag_sigma_end") {
+                if (parse_nag_float(key, value, parsed)) {
+                    params.sigma_end = parsed;
+                }
+            } else if (key == "nag_sigma_start") {
+                if (parse_nag_float(key, value, parsed)) {
+                    params.sigma_start = parsed;
+                }
+            }
+        }
+        return params;
+    }
+
     std::vector<float> parse_guidance_schedule_from_spec(std::string spec) {
         std::vector<float> schedule;
 

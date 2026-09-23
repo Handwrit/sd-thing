@@ -612,6 +612,91 @@ struct BongTangentScheduler : SigmaScheduler {
     }
 };
 
+// Two-stage arctangent schedule. midpoint and the pivots are fractions of
+// the step count, so the defaults line up with a 40-step two-stage tangent
+// (join at 20, bends at 10 and 30) and keep that shape when steps change.
+// start, middle, and end are fractions of sigma_max: 1 is full noise, 0 is clean.
+struct TangentScheduler : SigmaScheduler {
+    float midpoint = 0.5f;
+    float pivot_1  = 0.25f;
+    float pivot_2  = 0.75f;
+    float slope_1  = 1.f;
+    float slope_2  = 1.f;
+    float start    = 1.f;
+    float middle   = 0.5f;
+    float end      = 0.f;
+
+    explicit TangentScheduler(const char* extra_sample_args = nullptr) {
+        parse_extra_sample_args(extra_sample_args);
+    }
+
+    void parse_extra_sample_args(const char* extra_sample_args) {
+        for (const auto& [key, value] : parse_key_value_args(extra_sample_args, "tangent scheduler arg")) {
+            float parsed = 0.f;
+            if (!parse_strict_float(value, parsed)) {
+                LOG_WARN("ignoring invalid tangent scheduler arg '%s=%s'", key.c_str(), value.c_str());
+                continue;
+            }
+            if (key == "midpoint") {
+                midpoint = parsed;
+            } else if (key == "pivot_1") {
+                pivot_1 = parsed;
+            } else if (key == "pivot_2") {
+                pivot_2 = parsed;
+            } else if (key == "slope_1") {
+                slope_1 = parsed;
+            } else if (key == "slope_2") {
+                slope_2 = parsed;
+            } else if (key == "start") {
+                start = parsed;
+            } else if (key == "middle") {
+                middle = parsed;
+            } else if (key == "end") {
+                end = parsed;
+            }
+        }
+    }
+
+    std::vector<float> get_sigmas(uint32_t n, float /*sigma_min*/, float sigma_max, t_to_sigma_t /*t_to_sigma*/) override {
+        std::vector<float> result;
+        if (n == 0) {
+            return result;
+        }
+
+        const auto level = [sigma_max](float u) {
+            return sigma_max * u;
+        };
+
+        const int steps = static_cast<int>(n) + 2;
+        int mid_i       = static_cast<int>(std::lround(midpoint * static_cast<float>(n)));
+        if (mid_i < 1) {
+            mid_i = 1;
+        }
+        if (mid_i > steps - 1) {
+            mid_i = steps - 1;
+        }
+        const int stage_2_len = steps - mid_i;
+        const int stage_1_len = mid_i;
+        const float pivot_scale = static_cast<float>(n);
+        const float p1           = pivot_1 * pivot_scale;
+        const float p2           = pivot_2 * pivot_scale;
+
+        std::vector<float> sigmas_1 = BongTangentScheduler::get_bong_tangent_sigmas(
+            stage_1_len, slope_1, p1, level(start), level(middle));
+        std::vector<float> sigmas_2 = BongTangentScheduler::get_bong_tangent_sigmas(
+            stage_2_len, slope_2, p2 - static_cast<float>(stage_1_len), level(middle), level(end));
+
+        if (!sigmas_1.empty()) {
+            sigmas_1.pop_back();
+        }
+
+        result.reserve(sigmas_1.size() + sigmas_2.size());
+        result.insert(result.end(), sigmas_1.begin(), sigmas_1.end());
+        result.insert(result.end(), sigmas_2.begin(), sigmas_2.end());
+        return result;
+    }
+};
+
 struct KLOptimalScheduler : SigmaScheduler {
     std::vector<float> get_sigmas(uint32_t n, float sigma_min, float sigma_max, t_to_sigma_t t_to_sigma) override {
         std::vector<float> sigmas;
@@ -1100,6 +1185,10 @@ struct Denoiser {
             case BONG_TANGENT_SCHEDULER:
                 LOG_INFO("get_sigmas with bong_tangent scheduler");
                 scheduler = std::make_shared<BongTangentScheduler>();
+                break;
+            case TANGENT_SCHEDULER:
+                LOG_INFO("get_sigmas with tangent scheduler");
+                scheduler = std::make_shared<TangentScheduler>(extra_sample_args);
                 break;
             case KL_OPTIMAL_SCHEDULER:
                 LOG_INFO("get_sigmas with KL Optimal scheduler");

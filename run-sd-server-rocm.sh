@@ -18,6 +18,7 @@ BIN="${ROOT}/build/bin/sd-server"
 MODEL="${SD_MODEL:-${HOME}/ComfyUI/models/checkpoints/sd-v1-4.ckpt}"
 LORA_DIR="${SD_LORA_DIR:-${HOME}/ComfyUI/models/loras}"
 PORT="${SD_LISTEN_PORT:-1493}"
+OUTPUT_DIR="${SD_OUTPUT_DIR:-${ROOT}/output}"
 
 export HIP_VISIBLE_DEVICES="${HIP_VISIBLE_DEVICES:-0}"
 export GGML_CUDA_DISABLE_GRAPHS="${GGML_CUDA_DISABLE_GRAPHS:-1}"
@@ -30,6 +31,8 @@ exec "$BIN" \
   -m "$MODEL" \
   --listen-port "$PORT" \
   --lora-model-dir "$LORA_DIR" \
+  --output-dir "$OUTPUT_DIR" \
+  --serve-html-path "${ROOT}/index.html" \
   --rng cpu \
   --vae-on-cpu \
   "$@"

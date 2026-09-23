@@ -2155,7 +2155,8 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
                                               float frame_rate,
                                               const sd_cache_params_t* cache_params,
                                               bool preview_final_step,
-                                              const sd::Tensor<float>& video_positions) {
+                                              const sd::Tensor<float>& video_positions,
+                                              const SDCondition* nag_cond) {
     struct RunnerEndOnExit {
         GGMLRunner* runner = nullptr;
         ~RunnerEndOnExit() {
@@ -2230,6 +2231,20 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
     if (use_apg_guidance) {
         LOG_INFO("using Adaptive Projected Guidance (APG)");
     }
+    sd::guidance::NormalizedAttentionGuidanceParams nag_params = sd::guidance::parse_normalized_attention_guidance_args(extra_sample_args);
+    const bool nag_configured                                  = nag_cond != nullptr && !nag_cond->c_crossattn.empty() && nag_params.enabled();
+    const bool nag_for_model                                   = nag_configured && version == VERSION_FLUX2;
+    if (nag_configured && version != VERSION_FLUX2) {
+        LOG_WARN("NAG is only supported for Flux.2 dev, skipping");
+    }
+    if (nag_for_model) {
+        LOG_INFO("Flux.2 dev NAG scale %.2f tau %.2f alpha %.2f sigma [%.3f, %.3f]",
+                 nag_params.scale,
+                 nag_params.tau,
+                 nag_params.alpha,
+                 nag_params.sigma_end,
+                 nag_params.sigma_start);
+    }
     sd::guidance::ClassifierFreeGuidance classifier_free_guidance(cfg_scale, img_cfg_scale);
     sd::guidance::AdaptiveProjectedGuidance adaptive_projected_guidance(cfg_scale, img_cfg_scale, apg_params);
     const sd::guidance::BaseGuidance& primary_guidance = use_apg_guidance
@@ -2258,7 +2273,7 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
 
     auto denoise = [&](const sd::Tensor<float>& x, float sigma, int step) -> sd::guidance::GuiderOutput {
         if (get_cancel_flag() == SD_CANCEL_ALL) {
-            LOG_VERBOSE("cancelling generation");
+            LOG_INFO("generation canceled");
             return {};
         }
 
@@ -2352,7 +2367,8 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
                                  const sd::Tensor<float>* c_concat_override                 = nullptr,
                                  const std::vector<int>* local_skip_layers                  = nullptr,
                                  const std::vector<sd::Tensor<float>>* ref_latents_override = nullptr,
-                                 bool use_uncond_ip                                         = false) -> sd::Tensor<float> {
+                                 bool use_uncond_ip                                         = false,
+                                 bool apply_nag                                             = false) -> sd::Tensor<float> {
             diffusion_params.context     = condition.c_crossattn.empty() ? nullptr : &condition.c_crossattn;
             diffusion_params.c_concat    = c_concat_override != nullptr ? c_concat_override : (condition.c_concat.empty() ? nullptr : &condition.c_concat);
             diffusion_params.y           = condition.c_vector.empty() ? nullptr : &condition.c_vector;
@@ -2373,8 +2389,14 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
             } else if (sd_version_is_sd3(version)) {
                 diffusion_params.extra = SkipLayerDiffusionExtra{local_skip_layers};
             } else if (sd_version_is_flux(version) || sd_version_is_flux2(version) || sd_version_is_longcat(version) || sd_version_is_sefi_image(version)) {
-                diffusion_params.extra = FluxDiffusionExtra{&guidance_tensor,
-                                                            local_skip_layers};
+                FluxDiffusionExtra flux_extra{&guidance_tensor, local_skip_layers};
+                if (apply_nag && nag_for_model && nag_params.active_at_sigma(sigma)) {
+                    flux_extra.nag_context = &nag_cond->c_crossattn;
+                    flux_extra.nag_scale   = nag_params.scale;
+                    flux_extra.nag_tau     = nag_params.tau;
+                    flux_extra.nag_alpha   = nag_params.alpha;
+                }
+                diffusion_params.extra = flux_extra;
             } else if (sd_version_is_anima(version)) {
                 diffusion_params.extra = AnimaDiffusionExtra{condition.c_t5_ids.empty() ? nullptr : &condition.c_t5_ids,
                                                              condition.c_t5_weights.empty() ? nullptr : &condition.c_t5_weights};
@@ -2453,7 +2475,7 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
             }
         }
 
-        cond_out = run_condition(*positive_condition, c_concat_override);
+        cond_out = run_condition(*positive_condition, c_concat_override, nullptr, nullptr, false, true);
         if (cond_out.empty()) {
             return {};
         }
@@ -2543,7 +2565,11 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
 
     auto x0_opt = sample_k_diffusion(method, denoise, x_t, sigmas, sampler_rng, eta, is_flow_denoiser, extra_sample_args, denoiser);
     if (x0_opt.empty()) {
-        LOG_ERROR("Diffusion model sampling failed");
+        if (get_cancel_flag() == SD_CANCEL_ALL) {
+            LOG_INFO("generation canceled");
+        } else {
+            LOG_ERROR("Diffusion model sampling failed");
+        }
         if (control_net) {
             control_net->free_control_ctx();
         }

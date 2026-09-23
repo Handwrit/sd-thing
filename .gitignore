@@ -11,6 +11,9 @@ tests/
 *.exe
 *.gguf
 output*.png
+output/
+output_thumbs/
+studio_settings/
 models*
 *.log
 preview.png

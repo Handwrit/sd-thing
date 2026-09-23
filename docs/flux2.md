@@ -21,6 +21,16 @@
 
 <img alt="flux2 example" src="../assets/flux2/example.png" />
 
+### Normalized Attention Guidance
+
+Flux.2 [dev] can apply Normalized Attention Guidance in joint attention. `negative_prompt` stays the CFG unconditional text and is encoded only when `cfg_scale` asks for that pass. `--nag-prompt` is a separate string, encoded with the same Mistral template, and is used only inside attention. An empty NAG prompt leaves NAG off even if the negative prompt is set. Klein and every other model family ignore these options.
+
+NAG runs when `nag_scale` is greater than 1, the NAG prompt is non-empty, and the sampler sigma is inside `[nag_sigma_end, nag_sigma_start]`. Defaults are scale `1` (off), tau `2.5`, alpha `0.25`, sigma end `0.75`, and sigma start `1000`. A usual on setting is scale `5` with the other defaults. The unconditional CFG pass, when enabled, is a normal forward without NAG.
+
+```
+.\bin\Release\sd-cli.exe --diffusion-model ..\models\diffusion_models\flux2-dev-Q4_K_S.gguf --vae ..\models\vae\flux2_ae.safetensors --llm ..\models\text_encoders\Mistral-Small-3.2-24B-Instruct-2506-Q4_K_M.gguf -p "a cinematic shot of an ancient library" --nag-prompt "blurry, watermark" --cfg-scale 1.0 --sampling-method euler --extra-sample-args "nag_scale=5,nag_tau=2.5,nag_alpha=0.25,nag_sigma_end=0.75" -v --diffusion-fa --offload-to-cpu
+```
+
 ## Flux.2 klein 4B / Flux.2 klein base 4B
 
 ### Download weights
