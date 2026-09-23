@@ -258,6 +258,37 @@
       width: auto;
       min-width: 0;
     }
+    #nagArea {
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+    .is-off {
+      opacity: 0.42;
+      filter: grayscale(1);
+    }
+    .is-off label,
+    .is-off textarea,
+    .is-off input,
+    .is-off .stepper-btn {
+      color: #8b93a7;
+      cursor: not-allowed;
+    }
+    .is-off textarea,
+    .is-off input[type="number"] {
+      background: #171a22;
+      border-color: #2a3142;
+    }
+    .is-off input[type="range"] {
+      accent-color: #4b5563;
+    }
+    .is-off .stepper-btn,
+    .is-off .stepper-btn:hover,
+    .is-off button:disabled {
+      background: #232733;
+      color: #8b93a7;
+      opacity: 1;
+    }
 
     details {
       background: rgba(0, 0, 0, 0.2);
@@ -443,7 +474,8 @@
       overflow: hidden;
       padding: 1rem;
     }
-    .gallery img {
+    .gallery img,
+    .gallery video {
       max-width: 100%;
       max-height: 100%;
       object-fit: contain;
@@ -483,6 +515,7 @@
       <textarea id="negPrompt" style="height: 45px;">blurry, low quality, distorted, watermark</textarea>
     </div>
 
+    <div id="nagArea">
     <div class="field-group">
       <label title="Flux.2 dev attention guidance. CFG still uses Negative Prompt.">NAG Prompt</label>
       <textarea id="nagPrompt" style="height: 45px;" placeholder="Flux.2 dev only. Empty leaves NAG off."></textarea>
@@ -504,6 +537,7 @@
         <label title="NAG applies while sigma is at least this value.">Sigma End</label>
         <input type="number" id="nagSigmaEnd" min="0" max="1000" step="0.05" value="0.75" />
       </div>
+    </div>
     </div>
 
     <!-- Seed & Randomizer -->
@@ -564,19 +598,24 @@
       </select>
     </div>
 
+    <div class="field-group" id="videoFramesGroup" hidden>
+      <label title="MiniMax-H3 frames. Count snaps to 17k+5, minimum 5. Playback is 24 fps.">Frames</label>
+      <input type="number" id="videoFrames" min="5" step="17" value="5" />
+    </div>
+
     <div id="i2iPanel" hidden>
       <div class="row">
         <input type="file" id="i2iFile" accept="image/*" style="flex:1" />
         <button class="btn-secondary" type="button" onclick="useShownForI2i()">Use shown</button>
       </div>
-      <div class="field-group">
+      <div class="field-group" id="i2iStrengthGroup">
         <label>Denoise strength</label>
         <div class="slider-row">
           <input type="range" id="i2iStrength" min="0" max="1" step="0.05" value="0.75" oninput="i2iStrengthNum.value = this.value" />
           <input type="number" id="i2iStrengthNum" min="0" max="1" step="0.05" value="0.75" oninput="i2iStrength.value = this.value" />
         </div>
       </div>
-      <div class="field-group">
+      <div class="field-group" id="i2iDimGroup">
         <label>dim:</label>
         <div class="i2i-dims" onchange="updateI2iPreview()">
           <label><input type="radio" name="i2iDim" value="source" checked style="width:auto" /> source</label>
@@ -814,6 +853,7 @@
         genMode: value('genMode'),
         i2iStrength: value('i2iStrengthNum'),
         i2iDim: (document.querySelector('input[name="i2iDim"]:checked') || {}).value || 'source',
+        videoFrames: value('videoFrames'),
       };
     }
 
@@ -850,6 +890,7 @@
       set('genMode', form.genMode);
       set('i2iStrength', form.i2iStrength);
       set('i2iStrengthNum', form.i2iStrength);
+      set('videoFrames', form.videoFrames);
       if (form.i2iDim) {
         const dim = document.querySelector('input[name="i2iDim"][value="' + form.i2iDim + '"]');
         if (dim) dim.checked = true;
@@ -978,7 +1019,9 @@
         if (data.form) delete data.form.seed;
         applyFormState(data.form);
         syncDesigner();
+        syncConnectedModel();
         syncI2i();
+        snapH3Inputs();
         dlog('loaded settings ' + name);
       } catch (err) {
         setStatusText('Could not load settings: ' + (err && err.message ? err.message : err), false);
@@ -993,6 +1036,7 @@
         const model = data.sd_model_checkpoint || 'ok';
         connectedModel = model === 'ok' ? '' : model;
         dlog('sd-server connected ' + model);
+        syncConnectedModel();
         drawScheduleChart();
         return model;
       } catch (e) {
@@ -1527,6 +1571,130 @@
     }
 
     let connectedModel = '';
+    let h3AppliedFor = null;
+    let dimBeforeRef = null;
+
+    function isH3() {
+      const name = connectedModel.toLowerCase();
+      return name.includes('minimax') && name.includes('h3');
+    }
+
+    function isRef2va() {
+      return connectedModel.toLowerCase().includes('ref2va');
+    }
+
+    function setSteppedEnabled(id, on) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.disabled = !on;
+      const wrap = el.closest('.stepper');
+      if (!wrap) return;
+      wrap.querySelectorAll('button').forEach(btn => { btn.disabled = !on; });
+    }
+
+    function syncNagControls() {
+      const on = !isH3();
+      const prompt = document.getElementById('nagPrompt');
+      if (!on) {
+        prompt.value = '';
+        document.getElementById('nagScale').value = '1';
+        document.getElementById('nagTau').value = '2.5';
+        document.getElementById('nagAlpha').value = '0.25';
+        document.getElementById('nagSigmaEnd').value = '0.75';
+      }
+      prompt.disabled = !on;
+      ['nagScale', 'nagTau', 'nagAlpha', 'nagSigmaEnd'].forEach(id => setSteppedEnabled(id, on));
+      const nagArea = document.getElementById('nagArea');
+      if (nagArea) nagArea.classList.toggle('is-off', !on);
+    }
+
+    function syncRefDims() {
+      const radios = document.querySelectorAll('input[name="i2iDim"]');
+      if (isRef2va()) {
+        if (dimBeforeRef == null) dimBeforeRef = i2iDim();
+        const fit = document.querySelector('input[name="i2iDim"][value="fit-white"]');
+        if (fit) fit.checked = true;
+        radios.forEach(radio => { radio.disabled = true; });
+      } else if (dimBeforeRef != null) {
+        radios.forEach(radio => { radio.disabled = false; });
+        const prev = document.querySelector('input[name="i2iDim"][value="' + dimBeforeRef + '"]');
+        if (prev) prev.checked = true;
+        dimBeforeRef = null;
+      }
+      const dimGroup = document.getElementById('i2iDimGroup');
+      if (dimGroup) dimGroup.classList.toggle('is-off', isRef2va());
+      if (isI2i() && i2iSource) updateI2iPreview();
+    }
+
+    function alignVideoFrames(n) {
+      let frames = Math.round(Number(n));
+      if (!Number.isFinite(frames)) frames = 5;
+      frames = Math.max(5, frames);
+      while (frames % 17 !== 5) frames += 1;
+      return frames;
+    }
+
+    function align32(n) {
+      let value = Math.round(Number(n));
+      if (!Number.isFinite(value)) value = 32;
+      value = Math.max(32, value);
+      const rem = value % 32;
+      if (rem !== 0) value += 32 - rem;
+      return value;
+    }
+
+    function snapH3Inputs() {
+      const frames = document.getElementById('videoFrames');
+      if (frames) {
+        const aligned = alignVideoFrames(frames.value);
+        if (String(aligned) !== frames.value) frames.value = String(aligned);
+      }
+      if (!isH3()) return;
+      ['width', 'height'].forEach(id => {
+        const el = document.getElementById(id);
+        const aligned = align32(el.value);
+        if (String(aligned) !== el.value) el.value = String(aligned);
+      });
+    }
+
+    function syncConnectedModel() {
+      const h3 = isH3();
+      const mode = document.getElementById('genMode');
+      mode.options[0].text = h3 ? 't2v' : 't2i';
+      mode.options[1].text = h3 ? 'i2v' : 'i2i';
+      document.getElementById('genBtn').textContent = h3 ? 'Generate Video' : 'Generate Image';
+      const framesGroup = document.getElementById('videoFramesGroup');
+      if (framesGroup) framesGroup.hidden = !h3;
+      document.getElementById('width').step = h3 ? '32' : '64';
+      document.getElementById('height').step = h3 ? '32' : '64';
+      const strength = document.getElementById('i2iStrength');
+      const strengthNum = document.getElementById('i2iStrengthNum');
+      const strengthGroup = document.getElementById('i2iStrengthGroup');
+      if (strengthGroup) strengthGroup.classList.toggle('is-off', h3);
+      syncNagControls();
+      syncRefDims();
+      if (h3) {
+        strength.disabled = true;
+        strength.value = '0.75';
+        strengthNum.value = '0.75';
+        setSteppedEnabled('i2iStrengthNum', false);
+        if (h3AppliedFor !== connectedModel) {
+          document.getElementById('width').value = '864';
+          document.getElementById('height').value = '480';
+          document.getElementById('cfg').value = '1';
+          document.getElementById('cfgNum').value = '1';
+          const frames = document.getElementById('videoFrames');
+          if (frames) frames.value = '5';
+          h3AppliedFor = connectedModel;
+        }
+      } else if (h3AppliedFor) {
+        strength.disabled = false;
+        strength.value = '0.75';
+        strengthNum.value = '0.75';
+        setSteppedEnabled('i2iStrengthNum', true);
+        h3AppliedFor = null;
+      }
+    }
 
     function defaultScheduleKind() {
       const sampler = document.getElementById('sampler').value;
@@ -1813,6 +1981,21 @@
       }
     }
 
+    function imageForVideo() {
+      const img = i2iSource;
+      if (!img || !img.naturalWidth) return Promise.resolve(null);
+      if (isRef2va()) {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        softwareCtx(canvas).drawImage(img, 0, 0);
+        return canvasToPngDataUrl(canvas);
+      }
+      const canvas = composeI2iCanvas();
+      if (!canvas) return Promise.resolve(null);
+      return canvasToPngDataUrl(canvas);
+    }
+
     function canvasToPngDataUrl(canvas) {
       return new Promise((resolve, reject) => {
         let blob = null;
@@ -1839,7 +2022,12 @@
       const on = isI2i();
       panel.hidden = !on;
       document.getElementById('genBtn').disabled = on && !i2iSource;
-      if (on) updateI2iPreview();
+      if (on && i2iSource) {
+        updateI2iPreview();
+        requestAnimationFrame(() => {
+          if (isI2i() && i2iSource) updateI2iPreview();
+        });
+      }
       drawScheduleChart();
       persistSession();
     }
@@ -1975,32 +2163,59 @@
 
     let galleryGen = 0;
 
+    function isVideoName(name) {
+      return /\.(webm|avi)$/i.test(name || '');
+    }
+
+    function galleryHasMedia() {
+      return !!document.querySelector('#gallery img, #gallery video');
+    }
+
     function showOutput(name) {
       selectedOutput = name;
       document.querySelectorAll('#browser button').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.name === name);
       });
       const gallery = document.getElementById('gallery');
-      let img = gallery.querySelector('img');
       const fileUrl = studioBase + '/files/' + encodeURIComponent(name);
-      if (img && img.dataset.name === name && img.getAttribute('src') === fileUrl) return;
-      const token = ++galleryGen;
-      if (!img) {
+      const wantVideo = isVideoName(name);
+      let media = gallery.querySelector(wantVideo ? 'video' : 'img');
+      if (gallery.querySelector(wantVideo ? 'img' : 'video')) {
         gallery.innerHTML = '';
-        img = document.createElement('img');
-        gallery.appendChild(img);
+        media = null;
       }
-      img.alt = name;
-      img.dataset.name = name;
-      img.onload = () => {
-        if (token !== galleryGen) return;
-        dlog('gallery ' + name + ' shown ' + img.naturalWidth + 'x' + img.naturalHeight);
-      };
-      img.onerror = () => {
+      if (media && media.dataset.name === name && media.getAttribute('src') === fileUrl) return;
+      const token = ++galleryGen;
+      if (!media) {
+        gallery.innerHTML = '';
+        media = document.createElement(wantVideo ? 'video' : 'img');
+        if (wantVideo) {
+          media.controls = true;
+          media.loop = true;
+          media.playsInline = true;
+        }
+        gallery.appendChild(media);
+      }
+      media.alt = name;
+      media.dataset.name = name;
+      if (wantVideo) {
+        media.onloadeddata = () => {
+          if (token !== galleryGen) return;
+          dlog('gallery ' + name + ' video ' + media.videoWidth + 'x' + media.videoHeight);
+          const play = media.play();
+          if (play && play.catch) play.catch(() => {});
+        };
+      } else {
+        media.onload = () => {
+          if (token !== galleryGen) return;
+          dlog('gallery ' + name + ' shown ' + media.naturalWidth + 'x' + media.naturalHeight);
+        };
+      }
+      media.onerror = () => {
         if (token !== galleryGen) return;
         dlog('gallery failed ' + name);
       };
-      img.src = fileUrl;
+      media.src = fileUrl;
     }
 
     let lastStripNames = '';
@@ -2048,7 +2263,7 @@
         syncStripThumbs(files);
         if (selectName) {
           showOutput(selectName);
-        } else if (!currentJob && !document.querySelector('#gallery img') && files[0]) {
+        } else if (!currentJob && !galleryHasMedia() && files[0]) {
           showOutput(files[0].name);
         }
       } catch (err) {
@@ -2232,7 +2447,80 @@
       }
     }
 
+    function videoRequestBody(payload, image) {
+      snapH3Inputs();
+      const frames = alignVideoFrames(document.getElementById('videoFrames').value);
+      document.getElementById('videoFrames').value = String(frames);
+      const body = {
+        prompt: payload.prompt,
+        negative_prompt: payload.negative_prompt,
+        width: Number(document.getElementById('width').value),
+        height: Number(document.getElementById('height').value),
+        seed: payload.seed,
+        clip_skip: payload.clip_skip,
+        video_frames: frames,
+        fps: 24,
+        output_format: 'webm',
+        strength: 0.75,
+        sample_params: {
+          sample_steps: payload.steps,
+          sample_method: payload.sampler_name,
+          guidance: { txt_cfg: payload.cfg_scale },
+        },
+      };
+      if (payload.scheduler) body.sample_params.scheduler = payload.scheduler;
+      if (payload.extra_sample_args) body.sample_params.extra_sample_args = payload.extra_sample_args;
+      if (image) {
+        if (connectedModel.toLowerCase().includes('ref2va')) body.ref_images = [image];
+        else body.init_image = image;
+      }
+      return body;
+    }
+
+    async function enqueueVideo() {
+      const status = document.getElementById('status');
+      const payload = collectPayload();
+      try {
+        let image = null;
+        if (payload.i2i) {
+          if (!i2iSource || !i2iSource.naturalWidth) {
+            status.innerText = 'Choose an image';
+            return;
+          }
+          setStatusText('Preparing i2v…', false);
+          await new Promise(resolve => setTimeout(resolve, 0));
+          image = await imageForVideo();
+          if (!image) {
+            status.innerText = 'Choose an image';
+            return;
+          }
+        }
+        const body = videoRequestBody(payload, image);
+        const res = await fetch(apiBase + '/sdcpp/v1/vid_gen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        let data = {};
+        try { data = await res.json(); } catch (e) { data = {}; }
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        rememberQueuedSchedule(payload);
+        autoShowResult = true;
+        const imageField = body.ref_images ? 'ref_images' : (body.init_image ? 'init_image' : 'none');
+        dlog('queued video ' + (data.id || '') + ' ' + body.width + 'x' + body.height + ' frames=' + body.video_frames + ' ' + imageField);
+        setStatusText(data.status === 'generating' ? 'starting' : 'Queued', data.status === 'generating');
+        void pollServerQueue();
+      } catch (err) {
+        setStatusText('Could not queue: ' + (err && err.message ? err.message : err), false);
+        dlog('queue failed: ' + (err && err.message ? err.message : err));
+      }
+    }
+
     async function enqueueGenerate() {
+      if (isH3()) {
+        await enqueueVideo();
+        return;
+      }
       const status = document.getElementById('status');
       const payload = collectPayload();
       try {
@@ -2305,6 +2593,7 @@
         plus.title = 'Increase';
         wrap.append(minus, input, plus);
         const bump = (dir) => {
+          if (input.disabled) return;
           const step = Number(input.step);
           const delta = Number.isFinite(step) && step > 0 ? step : 1;
           const min = input.min === '' ? -Infinity : Number(input.min);
@@ -2326,15 +2615,16 @@
     bindPromptKeys('negPrompt');
     bindPromptKeys('nagPrompt');
     const controls = document.querySelector('.controls');
-    controls.addEventListener('input', (ev) => {
+    controls.addEventListener('input', () => {
       persistSession();
       drawScheduleChart();
-      const id = ev.target && ev.target.id;
-      if (isI2i() && (id === 'width' || id === 'height')) updateI2iPreview();
+      if (isI2i() && i2iSource) updateI2iPreview();
     });
     controls.addEventListener('change', () => {
+      snapH3Inputs();
       persistSession();
       drawScheduleChart();
+      if (isI2i() && i2iSource) updateI2iPreview();
     });
     restoreClientLog();
     dlog((clientLogLines.length ? 'page load, restored prior log' : 'page load') + ' ' + location.origin);
@@ -2342,6 +2632,7 @@
     dlog('studio ' + studioBase);
     document.getElementById('i2iFile').addEventListener('change', (ev) => {
       const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
       loadI2iFile(file);
     });
     restoreSession();

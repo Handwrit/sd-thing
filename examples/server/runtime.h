@@ -147,3 +147,10 @@ bool consume_generation_interrupt(ServerRuntime& runtime);
 std::string save_generated_image(const ServerRuntime& runtime,
                                  const sd_image_t& image,
                                  const std::string& metadata);
+std::vector<std::string> save_generated_frames(const ServerRuntime& runtime,
+                                               const sd_image_t* images,
+                                               int count,
+                                               const std::string& metadata);
+std::string save_generated_bytes(const ServerRuntime& runtime,
+                                 const std::vector<uint8_t>& bytes,
+                                 const std::string& extension);

@@ -3,9 +3,11 @@
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <ctime>
 #include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <regex>
 #include <sstream>
@@ -532,5 +534,112 @@ std::string save_generated_image(const ServerRuntime& runtime,
         return {};
     }
     LOG_INFO("save result image to '%s'", path.u8string().c_str());
+    return path.u8string();
+}
+
+std::vector<std::string> save_generated_frames(const ServerRuntime& runtime,
+                                               const sd_image_t* images,
+                                               int count,
+                                               const std::string& metadata) {
+    std::vector<std::string> paths;
+    if (runtime.svr_params == nullptr || runtime.svr_params->output_dir.empty() || images == nullptr || count <= 0) {
+        return paths;
+    }
+
+    const fs::path dir = runtime.svr_params->output_dir;
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    if (ec) {
+        LOG_ERROR("failed to create output dir '%s': %s", dir.u8string().c_str(), ec.message().c_str());
+        return paths;
+    }
+
+    const std::string stamp = local_datetime_stamp();
+    const std::string stem  = output_model_stem(runtime);
+    std::string base        = stamp + "_" + stem;
+    auto frame_name         = [&](const std::string& sequence, int index) {
+        char suffix[32];
+        std::snprintf(suffix, sizeof(suffix), "_f%04d.png", index + 1);
+        return sequence + suffix;
+    };
+    if (fs::exists(dir / frame_name(base, 0), ec)) {
+        for (int n = 2; n < 10000; ++n) {
+            const std::string candidate = base + "_" + std::to_string(n);
+            if (!fs::exists(dir / frame_name(candidate, 0), ec)) {
+                base = candidate;
+                break;
+            }
+        }
+    }
+
+    paths.reserve(static_cast<size_t>(count));
+    for (int i = 0; i < count; ++i) {
+        if (images[i].data == nullptr) {
+            continue;
+        }
+        const fs::path path = dir / frame_name(base, i);
+        if (!write_image_to_file(path.u8string(),
+                                 images[i].data,
+                                 images[i].width,
+                                 images[i].height,
+                                 images[i].channel,
+                                 metadata)) {
+            LOG_ERROR("save result frame to '%s' failed", path.u8string().c_str());
+            continue;
+        }
+        LOG_INFO("save result frame to '%s'", path.u8string().c_str());
+        paths.push_back(path.u8string());
+    }
+    return paths;
+}
+
+std::string save_generated_bytes(const ServerRuntime& runtime,
+                                 const std::vector<uint8_t>& bytes,
+                                 const std::string& extension) {
+    if (runtime.svr_params == nullptr || runtime.svr_params->output_dir.empty() || bytes.empty()) {
+        return {};
+    }
+
+    std::string ext = lower_ascii(extension);
+    if (!ext.empty() && ext[0] != '.') {
+        ext = "." + ext;
+    }
+    if (ext != ".webm" && ext != ".avi" && ext != ".webp") {
+        LOG_ERROR("refusing to save generated media with extension '%s'", ext.c_str());
+        return {};
+    }
+
+    const fs::path dir = runtime.svr_params->output_dir;
+    std::error_code ec;
+    fs::create_directories(dir, ec);
+    if (ec) {
+        LOG_ERROR("failed to create output dir '%s': %s", dir.u8string().c_str(), ec.message().c_str());
+        return {};
+    }
+
+    const std::string stamp = local_datetime_stamp();
+    const std::string stem  = output_model_stem(runtime);
+    const std::string base  = stamp + "_" + stem;
+    fs::path path           = dir / (base + ext);
+    if (fs::exists(path, ec)) {
+        for (int n = 2; n < 10000; ++n) {
+            path = dir / (base + "_" + std::to_string(n) + ext);
+            if (!fs::exists(path, ec)) {
+                break;
+            }
+        }
+    }
+
+    std::ofstream out(path, std::ios::binary);
+    if (!out) {
+        LOG_ERROR("save result video to '%s' failed", path.u8string().c_str());
+        return {};
+    }
+    out.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+    if (!out) {
+        LOG_ERROR("save result video to '%s' failed", path.u8string().c_str());
+        return {};
+    }
+    LOG_INFO("save result video to '%s'", path.u8string().c_str());
     return path.u8string();
 }

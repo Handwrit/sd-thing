@@ -3,6 +3,7 @@
 #include "async_jobs.h"
 
 #include <algorithm>
+#include <cstring>
 #include <iomanip>
 #include <sstream>
 
@@ -338,6 +339,20 @@ bool execute_vid_gen_job(ServerRuntime& runtime,
         return false;
     }
 
+    const char* version_name = sd_get_model_version_name(runtime.sd_ctx);
+    if (version_name != nullptr && std::strcmp(version_name, "MiniMax-H3") == 0) {
+        free_sd_audio(generated_audio);
+        job.result_output_files = save_generated_frames(runtime, results.data(), num_results, str_params);
+        if (job.result_output_files.empty()) {
+            error_message = "failed to save generated frames";
+            return false;
+        }
+        output_frame_count = num_results;
+        output_media_b64.clear();
+        output_media_mime_type.clear();
+        return true;
+    }
+
     std::vector<uint8_t> video_bytes = create_video_from_sd_images_to_vector(job.vid_gen.output_format,
                                                                              results.data(),
                                                                              num_results,
@@ -349,6 +364,12 @@ bool execute_vid_gen_job(ServerRuntime& runtime,
     if (video_bytes.empty()) {
         error_message = "failed to encode generated video container";
         return false;
+    }
+
+    job.result_output_files.clear();
+    const std::string saved_path = save_generated_bytes(runtime, video_bytes, job.vid_gen.output_format);
+    if (!saved_path.empty()) {
+        job.result_output_files.push_back(saved_path);
     }
 
     output_media_b64       = base64_encode(video_bytes);

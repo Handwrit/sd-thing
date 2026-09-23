@@ -27,6 +27,7 @@ MAX_SETTINGS_BODY = 512_000
 THUMB_SIZE = (160, 96)
 SAFE_PNG = re.compile(r"^[A-Za-z0-9._-]+\.png$", re.IGNORECASE)
 SAFE_JPG = re.compile(r"^[A-Za-z0-9._-]+\.jpg$", re.IGNORECASE)
+SAFE_MEDIA = re.compile(r"^[A-Za-z0-9._-]+\.(png|webm|avi)$", re.IGNORECASE)
 
 _queue: list[Path] = []
 _queued: set[str] = set()
@@ -39,6 +40,26 @@ def png_name_ok(name: str) -> bool:
     if len(name) < 5 or name[0] == "." or ".." in name:
         return False
     return bool(SAFE_PNG.fullmatch(name))
+
+
+def media_name_ok(name: str) -> bool:
+    if len(name) < 5 or name[0] == "." or ".." in name:
+        return False
+    return bool(SAFE_MEDIA.fullmatch(name))
+
+
+def is_video_name(name: str) -> bool:
+    lower = name.lower()
+    return lower.endswith(".webm") or lower.endswith(".avi")
+
+
+def media_type(name: str) -> str:
+    lower = name.lower()
+    if lower.endswith(".webm"):
+        return "video/webm"
+    if lower.endswith(".avi"):
+        return "video/x-msvideo"
+    return "image/png"
 
 
 def jpg_name_ok(name: str) -> bool:
@@ -74,19 +95,28 @@ def scan_outputs() -> list[dict]:
     entries: list[tuple[float, str]] = []
     if OUTPUT_DIR.is_dir():
         for path in OUTPUT_DIR.iterdir():
-            if not path.is_file() or not png_name_ok(path.name):
+            if not path.is_file() or not media_name_ok(path.name):
                 continue
             try:
                 mtime = path.stat().st_mtime
             except OSError:
                 continue
-            jpg = thumb_path_for(path.name)
-            if thumb_stale(path, jpg):
-                enqueue_thumb(path)
+            if not is_video_name(path.name):
+                jpg = thumb_path_for(path.name)
+                if thumb_stale(path, jpg):
+                    enqueue_thumb(path)
             entries.append((mtime, path.name))
     entries.sort(key=lambda item: (-item[0], item[1]))
     files = []
     for _, name in entries:
+        if is_video_name(name):
+            files.append({
+                "name": name,
+                "thumb": "",
+                "ready": False,
+                "video": True,
+            })
+            continue
         jpg = thumb_path_for(name)
         files.append({
             "name": name,
@@ -280,14 +310,18 @@ class StudioHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/files/"):
             name = path[len("/files/"):]
-            if "/" in name or not png_name_ok(name):
+            if "/" in name or not media_name_ok(name):
                 self._send(404, b'{"error":"not found"}', "application/json")
                 return
-            png = OUTPUT_DIR / name
-            if not png.is_file():
+            media = OUTPUT_DIR / name
+            if not media.is_file():
                 self._send(404, b'{"error":"not found"}', "application/json")
                 return
-            self._send_file(png, "image/png")
+            content_type = media_type(name)
+            if content_type.startswith("video/"):
+                self._send(200, media.read_bytes(), content_type)
+            else:
+                self._send_file(media, content_type)
             return
 
         self._send(404, b"not found", "text/plain")
