@@ -317,16 +317,34 @@
       gap: 0.5rem;
       align-items: stretch;
     }
-    .settings-save { width: 100%; }
+    .settings-save { width: 100%; margin-top: 5px; }
     .settings-list {
       display: flex;
       flex-direction: column;
       gap: 0.35rem;
+      flex: 0 0 auto;
+      height: 26rem;
+      overflow-y: scroll;
+    }
+    .settings-row {
+      display: flex;
+      gap: 0.35rem;
+      align-items: stretch;
     }
     .settings-list button {
       width: 100%;
       text-align: left;
       white-space: normal;
+    }
+    .settings-row .settings-load {
+      flex: 1;
+      width: auto;
+      min-width: 0;
+    }
+    .settings-row .settings-delete {
+      flex: 0 0 auto;
+      width: auto;
+      padding: 0.4rem 0.7rem;
     }
     .settings-overlay {
       position: fixed;
@@ -508,6 +526,11 @@
     <div class="field-group">
       <label>Prompt</label>
       <textarea id="prompt" placeholder="A cozy cabin in the misty pine forest...">a cinematic shot of an ancient library, dust motes in sunbeams, hyperrealistic, octane render</textarea>
+      <div class="row" style="margin-top: 0.4rem;">
+        <button class="btn-secondary" type="button" id="loadPromptBtn">Load prompt</button>
+        <button class="btn-secondary" type="button" id="loadPromptShownBtn">From shown</button>
+        <input type="file" id="loadPromptFile" accept="image/png,.png" hidden />
+      </div>
     </div>
 
     <div class="field-group">
@@ -1000,14 +1023,36 @@
       settings.forEach(item => {
         const name = item && item.name;
         if (!name) return;
+        const row = document.createElement('div');
+        row.className = 'settings-row';
         const button = document.createElement('button');
         button.type = 'button';
-        button.className = 'btn-secondary';
+        button.className = 'btn-secondary settings-load';
         button.textContent = name;
         button.title = 'Load ' + name;
         button.addEventListener('click', () => { void loadSavedSetting(name); });
-        host.appendChild(button);
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn-secondary settings-delete';
+        remove.textContent = 'x';
+        remove.title = 'Delete ' + name;
+        remove.addEventListener('click', () => { void deleteSavedSetting(name); });
+        row.append(button, remove);
+        host.appendChild(row);
       });
+    }
+
+    async function deleteSavedSetting(name) {
+      if (!window.confirm('delete ' + name + ' y/n?')) return;
+      try {
+        const res = await fetch(studioBase + '/settings/' + encodeURIComponent(name), { method: 'DELETE' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        dlog('deleted settings ' + name);
+        await refreshSavedSettings();
+      } catch (err) {
+        setStatusText('Could not delete settings: ' + (err && err.message ? err.message : err), false);
+      }
     }
 
     async function loadSavedSetting(name) {
@@ -1579,6 +1624,11 @@
       return name.includes('minimax') && name.includes('h3');
     }
 
+    function isAnima11() {
+      const name = connectedModel.toLowerCase();
+      return name.includes('anima') && name.includes('1.1');
+    }
+
     function isRef2va() {
       return connectedModel.toLowerCase().includes('ref2va');
     }
@@ -1593,7 +1643,7 @@
     }
 
     function syncNagControls() {
-      const on = !isH3();
+      const on = !isH3() && !isAnima11();
       const prompt = document.getElementById('nagPrompt');
       if (!on) {
         prompt.value = '';
@@ -1939,6 +1989,116 @@
       if (i2iSourceUrl && i2iSourceUrl !== url) URL.revokeObjectURL(i2iSourceUrl);
       i2iSourceUrl = url || null;
       setI2iSource(img);
+    }
+
+    function readPngParameters(buffer) {
+      const bytes = new Uint8Array(buffer);
+      const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+      if (bytes.length < 8 || sig.some((b, i) => bytes[i] !== b)) return null;
+      const view = new DataView(buffer);
+      const decoder = new TextDecoder('utf-8');
+      let offset = 8;
+      while (offset + 12 <= bytes.length) {
+        const length = view.getUint32(offset);
+        const type = decoder.decode(bytes.subarray(offset + 4, offset + 8));
+        const dataStart = offset + 8;
+        const dataEnd = dataStart + length;
+        if (dataEnd + 4 > bytes.length) return null;
+        if (type === 'tEXt') {
+          const data = bytes.subarray(dataStart, dataEnd);
+          let nul = -1;
+          for (let i = 0; i < data.length; i++) {
+            if (data[i] === 0) { nul = i; break; }
+          }
+          if (nul > 0 && decoder.decode(data.subarray(0, nul)) === 'parameters') {
+            return decoder.decode(data.subarray(nul + 1));
+          }
+        }
+        if (type === 'IEND') break;
+        offset = dataEnd + 4;
+      }
+      return null;
+    }
+
+    function sectionAfter(text, label, followers) {
+      const key = '\n' + label;
+      const at = text.indexOf(key);
+      if (at < 0) return null;
+      const start = at + key.length;
+      let end = text.length;
+      followers.forEach(follow => {
+        const next = text.indexOf('\n' + follow, start);
+        if (next !== -1 && next < end) end = next;
+      });
+      return text.slice(start, end);
+    }
+
+    function parseParametersText(text) {
+      const marker = ', SDCPP: ';
+      const at = text.lastIndexOf(marker);
+      if (at >= 0) {
+        try {
+          const data = JSON.parse(text.slice(at + marker.length).trim());
+          if (data && data.prompt && typeof data.prompt.positive === 'string') {
+            const prompt = data.prompt;
+            return {
+              positive: prompt.positive,
+              negative: Object.prototype.hasOwnProperty.call(prompt, 'negative') ? prompt.negative : null,
+              nag: Object.prototype.hasOwnProperty.call(prompt, 'nag') ? prompt.nag : null,
+            };
+          }
+        } catch (err) { /* fall through to the text block */ }
+      }
+      const cuts = ['\nNegative prompt: ', '\nNAG prompt: ', '\nSteps: ']
+        .map(mark => text.indexOf(mark))
+        .filter(index => index >= 0);
+      const cut = cuts.length ? Math.min.apply(null, cuts) : text.length;
+      return {
+        positive: text.slice(0, cut),
+        negative: sectionAfter(text, 'Negative prompt: ', ['NAG prompt: ', 'Steps: ']),
+        nag: sectionAfter(text, 'NAG prompt: ', ['Steps: ', 'Negative prompt: ']),
+      };
+    }
+
+    function applyPngPromptBytes(buffer, label) {
+      let text = null;
+      try {
+        text = readPngParameters(buffer);
+      } catch (err) {
+        text = null;
+      }
+      const parsed = text == null || text.trim() === '' ? null : parseParametersText(text);
+      if (!parsed || typeof parsed.positive !== 'string') {
+        setStatusText('No prompt metadata in that PNG', false);
+        return false;
+      }
+      document.getElementById('prompt').value = parsed.positive;
+      if (typeof parsed.negative === 'string' && parsed.negative.trim() !== '') {
+        document.getElementById('negPrompt').value = parsed.negative;
+      }
+      if (typeof parsed.nag === 'string' && parsed.nag.trim() !== '') {
+        document.getElementById('nagPrompt').value = parsed.nag;
+      }
+      persistSession();
+      setStatusText('Loaded prompt from ' + label, false);
+      return true;
+    }
+
+    async function loadPromptFromShown() {
+      const shown = document.querySelector('#gallery img');
+      const name = shown && shown.dataset.name;
+      if (!name || isVideoName(name)) {
+        setStatusText('No PNG is shown', false);
+        return;
+      }
+      try {
+        const res = await fetch(studioBase + '/files/' + encodeURIComponent(name), { cache: 'no-store' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        await applyPngPromptBytes(await res.arrayBuffer(), name);
+      } catch (err) {
+        setStatusText('Could not read the shown image', false);
+        dlog('load prompt shown failed: ' + (err && err.message ? err.message : err));
+      }
     }
 
     function loadI2iFile(file) {
@@ -2634,6 +2794,22 @@
       const file = ev.target.files && ev.target.files[0];
       if (!file) return;
       loadI2iFile(file);
+    });
+    document.getElementById('loadPromptBtn').addEventListener('click', () => {
+      const input = document.getElementById('loadPromptFile');
+      input.value = '';
+      input.click();
+    });
+    document.getElementById('loadPromptFile').addEventListener('change', (ev) => {
+      const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => applyPngPromptBytes(reader.result, file.name);
+      reader.onerror = () => setStatusText('Could not read that file', false);
+      reader.readAsArrayBuffer(file);
+    });
+    document.getElementById('loadPromptShownBtn').addEventListener('click', () => {
+      void loadPromptFromShown();
     });
     restoreSession();
     syncI2i();

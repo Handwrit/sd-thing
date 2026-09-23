@@ -224,7 +224,7 @@ def list_settings() -> list[dict]:
 def add_cors(handler: BaseHTTPRequestHandler) -> None:
     origin = handler.headers.get("Origin") or "*"
     handler.send_header("Access-Control-Allow-Origin", origin)
-    handler.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+    handler.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
     handler.send_header("Access-Control-Allow-Headers", "*")
     handler.send_header("Access-Control-Expose-Headers", "*")
 
@@ -380,6 +380,29 @@ class StudioHandler(BaseHTTPRequestHandler):
         tmp.replace(dest)
         body = json.dumps({"name": name}).encode("utf-8")
         self._send(200, body, "application/json")
+
+    def do_DELETE(self) -> None:
+        parsed = urlparse(self.path)
+        path = unquote(parsed.path)
+        if not path.startswith("/settings/"):
+            self._send(404, b'{"error":"not found"}', "application/json")
+            return
+        name = unquote(path[len("/settings/"):])
+        dest = setting_path(name)
+        if dest is None or not dest.is_file():
+            self._send(404, b'{"error":"not found"}', "application/json")
+            return
+        try:
+            dest.resolve().relative_to(SETTINGS_DIR.resolve())
+        except ValueError:
+            self._send(400, b'{"error":"not found"}', "application/json")
+            return
+        try:
+            dest.unlink()
+        except OSError:
+            self._send(500, b'{"error":"could not delete"}', "application/json")
+            return
+        self._send(200, b'{"deleted":true}', "application/json")
 
 
 def main() -> int:
