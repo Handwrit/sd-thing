@@ -17,18 +17,20 @@ LORA_DIR="${SD_LORA_DIR:-${HOME}/ComfyUI/models/loras}"
 PORT="${SD_LISTEN_PORT:-1493}"
 OUTPUT_DIR="${SD_OUTPUT_DIR:-${ROOT}/output}"
 
-exec "$BIN" \
-  --diffusion-model "$DIFFUSION" \
-  --vae "$VAE" \
-  --llm "$LLM" \
-  --listen-port "$PORT" \
-  --lora-model-dir "$LORA_DIR" \
-  --output-dir "$OUTPUT_DIR" \
-  --serve-html-path "${ROOT}/index.html" \
-  --rng cpu \
-#  --vae-on-cpu \
-  --diffusion-fa \
-##  --offload-to-cpu \
-  --max-vram 12 \
-  --disable-prefetch \
-  "$@"
+ARGS=(
+  --diffusion-model "$DIFFUSION"
+  --vae "$VAE"
+  --llm "$LLM"
+  --listen-port "$PORT"
+  --lora-model-dir "$LORA_DIR"
+  --output-dir "$OUTPUT_DIR"
+  --serve-html-path "${ROOT}/index.html"
+  --rng cpu
+#  --vae-on-cpu
+  --diffusion-fa
+# --offload-to-cpu
+  --max-vram 12    # I don't think this works.
+  --disable-prefetch
+)
+
+exec "$BIN" "${ARGS[@]}" "$@"
