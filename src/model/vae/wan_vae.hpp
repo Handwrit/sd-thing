@@ -29,7 +29,8 @@ namespace WAN {
             auto weight = tensor_storage_map.find(prefix + "weight");
             if (weight != tensor_storage_map.end() && weight->second.ne[2] == 1 &&
                 weight->second.ne[3] == in_channels * out_channels) {
-                // Image VAE exports may retain Conv3d weights with a singleton temporal kernel.
+                // Every Wan-family VAE, not only Qwen Image 2.1: some image
+                // exports keep a Conv3d weight whose temporal kernel is 1.
                 std::get<0>(kernel_size) = 1;
                 std::get<0>(padding)     = 0;
             }
@@ -1301,6 +1302,8 @@ namespace WAN {
                      SDVersion version                                   = VERSION_WAN2,
                      std::shared_ptr<RunnerWeightManager> weight_manager = nullptr)
             : VAE(version, backend, prefix, weight_manager), decode_only(decode_only) {
+            // Every Wan-family VAE, not only Qwen Image 2.1. A temporal
+            // kernel wider than 3 is the 2D weight packed into conv1.
             const auto conv_in = tensor_storage_map.find((prefix.empty() ? "" : prefix + ".") + "decoder.conv1.weight");
             const bool is_2D   = conv_in != tensor_storage_map.end() && conv_in->second.ne[2] > 3;
             LOG_VERBOSE("Wan VAE convolution type: %s", is_2D ? "2D" : "3D");

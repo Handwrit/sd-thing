@@ -126,6 +126,53 @@ def scan_outputs() -> list[dict]:
     return files
 
 
+def prune_orphan_thumbs() -> int:
+    if not THUMB_DIR.is_dir():
+        return 0
+    live: set[str] = set()
+    if OUTPUT_DIR.is_dir():
+        for path in OUTPUT_DIR.iterdir():
+            if path.is_file() and png_name_ok(path.name):
+                live.add(path.stem)
+    removed = 0
+    for path in THUMB_DIR.iterdir():
+        if not path.is_file():
+            continue
+        name = path.name
+        orphan = name.endswith(".jpg.tmp") or (jpg_name_ok(name) and path.stem not in live)
+        if not orphan:
+            continue
+        try:
+            path.unlink()
+            removed += 1
+        except OSError as exc:
+            print(f"thumb prune failed {name}: {exc}", file=sys.stderr)
+    return removed
+
+
+def delete_output_file(name: str) -> str | None:
+    if "/" in name or "\\" in name or not media_name_ok(name):
+        return "bad"
+    media = OUTPUT_DIR / name
+    try:
+        media.resolve().relative_to(OUTPUT_DIR.resolve())
+    except (OSError, ValueError):
+        return "bad"
+    if not media.is_file():
+        return "missing"
+    try:
+        media.unlink()
+    except OSError:
+        return "failed"
+    thumb = thumb_path_for(name)
+    for extra in (thumb, thumb.with_suffix(".jpg.tmp")):
+        try:
+            extra.unlink(missing_ok=True)
+        except OSError as exc:
+            print(f"thumb delete failed {extra.name}: {exc}", file=sys.stderr)
+    return None
+
+
 def write_thumb(png: Path) -> None:
     THUMB_DIR.mkdir(parents=True, exist_ok=True)
     dest = thumb_path_for(png.name)
@@ -384,6 +431,17 @@ class StudioHandler(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None:
         parsed = urlparse(self.path)
         path = unquote(parsed.path)
+        if path.startswith("/files/"):
+            result = delete_output_file(path[len("/files/"):])
+            if result == "missing":
+                self._send(404, b'{"error":"not found"}', "application/json")
+            elif result == "failed":
+                self._send(500, b'{"error":"could not delete"}', "application/json")
+            elif result:
+                self._send(400, b'{"error":"not found"}', "application/json")
+            else:
+                self._send(200, b'{"deleted":true}', "application/json")
+            return
         if not path.startswith("/settings/"):
             self._send(404, b'{"error":"not found"}', "application/json")
             return
@@ -412,6 +470,9 @@ def main() -> int:
     args = parser.parse_args()
 
     THUMB_DIR.mkdir(parents=True, exist_ok=True)
+    removed = prune_orphan_thumbs()
+    if removed:
+        print(f"removed {removed} old thumbs", flush=True)
     worker = threading.Thread(target=thumb_worker, name="thumbs", daemon=True)
     worker.start()
     scan_outputs()

@@ -117,7 +117,12 @@
       overflow-y: hidden;
       padding-bottom: 0.15rem;
     }
-    .browser button {
+    .browser .thumb-item {
+      position: relative;
+      flex: 0 0 auto;
+      display: flex;
+    }
+    .browser .thumb-open {
       flex: 0 0 auto;
       display: flex;
       align-items: center;
@@ -132,8 +137,20 @@
       user-select: none;
       -webkit-user-drag: none;
     }
-    .browser button.active {
+    .browser .thumb-open.active {
       border-color: var(--accent);
+    }
+    .browser .thumb-delete {
+      position: absolute;
+      top: 0.25rem;
+      right: 0.25rem;
+      z-index: 1;
+      width: auto;
+      min-width: 0;
+      padding: 0.05rem 0.35rem;
+      line-height: 1.1;
+      font-size: 0.75rem;
+      border-radius: 4px;
     }
     .browser .thumb-label {
       font-size: 0.68rem;
@@ -165,6 +182,75 @@
       padding: 0.6rem;
     }
     #i2iPanel[hidden] { display: none; }
+    .ref-pager {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+    }
+    .ref-pager[hidden] { display: none; }
+    .ref-pager span { flex: 1; font-size: 0.85rem; }
+    #qwenUseInitLabel[hidden], #refIncludeLabel[hidden] { display: none; }
+    #sizeMp { text-transform: none; letter-spacing: 0; color: var(--muted); font-weight: 500; }
+    .size-board { display: flex; flex-direction: column; gap: 0.45rem; }
+    .size-head {
+      display: flex;
+      align-items: baseline;
+      gap: 0.45rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+    .size-head strong { color: var(--text); font-weight: 600; text-transform: none; letter-spacing: 0; }
+    .size-rotate {
+      margin-left: auto;
+      padding: 0.15rem 0.45rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--input-bg);
+      color: var(--text);
+      font-size: 0.68rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .size-rotate[hidden] { display: none; }
+    .size-rotate.is-on {
+      border-color: #c4844a;
+      background: #3a2a22;
+      color: #f3d2b0;
+    }
+    .size-group { display: flex; flex-direction: column; gap: 0.3rem; }
+    .size-group-title {
+      margin: 0;
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .size-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.35rem; }
+    .size-chip {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.05rem;
+      background: var(--input-bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 0.38rem 0.42rem;
+      cursor: pointer;
+      text-align: left;
+      line-height: 1.15;
+    }
+    .size-chip:hover { border-color: #4f5670; }
+    .size-chip.is-on { border-color: var(--accent); background: #2a2f4a; }
+    .size-chip.is-rotated { border-color: #c4844a; background: #3a2a22; }
+    .size-chip.is-rotated.is-on { border-color: var(--accent); background: #3a2a22; }
+    .size-chip .ratio { font-size: 0.68rem; color: var(--muted); letter-spacing: 0.04em; }
+    .size-chip .dims { font-size: 0.78rem; font-weight: 600; }
+    .size-chip .mp { font-size: 0.66rem; color: var(--muted); }
     .i2i-dims {
       display: flex;
       flex-direction: column;
@@ -244,6 +330,7 @@
       display: block;
     }
     .field-group { display: flex; flex-direction: column; }
+    #i2iStrengthGroup[hidden], #i2iDimGroup[hidden], #videoFramesGroup[hidden] { display: none; }
     .slider-row { display: flex; align-items: center; gap: 0.5rem; }
     .row { display: flex; gap: 0.5rem; }
     .nag-grid {
@@ -595,22 +682,16 @@
     <div class="row">
       <div class="field-group" style="flex:1">
         <label>Width</label>
-        <input type="number" id="width" min="64" max="2048" step="64" value="512" />
+        <input type="number" id="width" min="64" max="2816" step="64" value="512" />
       </div>
       <div class="field-group" style="flex:1">
         <label>Height</label>
-        <input type="number" id="height" min="64" max="2048" step="64" value="512" />
+        <input type="number" id="height" min="64" max="2816" step="64" value="512" />
       </div>
-      <div class="field-group" style="flex:1">
-        <label>Preset</label>
-        <select onchange="applyPreset(this.value)">
-          <option value="512x512">512×512</option>
-          <option value="768x768">768×768</option>
-          <option value="1024x1024">1024×1024</option>
-          <option value="512x768">512×768</option>
-          <option value="768x512">768×512</option>
-        </select>
-      </div>
+    </div>
+    <div class="size-board" id="sizeBoard">
+      <div class="size-head">Size <strong id="sizeProfile"></strong> <span id="sizeMp"></span><button type="button" id="sizeRotate" class="size-rotate" hidden>Rotate</button></div>
+      <div id="sizeGroups"></div>
     </div>
 
     <div class="field-group">
@@ -623,14 +704,25 @@
 
     <div class="field-group" id="videoFramesGroup" hidden>
       <label title="MiniMax-H3 frames. Count snaps to 17k+5, minimum 5. Playback is 24 fps.">Frames</label>
-      <input type="number" id="videoFrames" min="5" step="17" value="5" />
+      <input type="number" id="videoFrames" min="5" step="17" value="5" disabled />
     </div>
 
     <div id="i2iPanel" hidden>
+      <div id="refPager" class="ref-pager" hidden>
+        <button class="btn-secondary" type="button" onclick="stepRefPage(-1)">←</button>
+        <span id="refPageLabel">1 / 4 · Main</span>
+        <button class="btn-secondary" type="button" onclick="stepRefPage(1)">→</button>
+      </div>
       <div class="row">
         <input type="file" id="i2iFile" accept="image/*" style="flex:1" />
         <button class="btn-secondary" type="button" onclick="useShownForI2i()">Use shown</button>
       </div>
+      <label id="qwenUseInitLabel" class="designer-check" hidden>
+        <input type="checkbox" id="qwenUseInit" style="width:auto" /> Use this image as the init image
+      </label>
+      <label id="refIncludeLabel" class="designer-check" hidden>
+        <input type="checkbox" id="refInclude" style="width:auto" /> Include
+      </label>
       <div class="field-group" id="i2iStrengthGroup">
         <label>Denoise strength</label>
         <div class="slider-row">
@@ -877,6 +969,9 @@
         i2iStrength: value('i2iStrengthNum'),
         i2iDim: (document.querySelector('input[name="i2iDim"]:checked') || {}).value || 'source',
         videoFrames: value('videoFrames'),
+        qwenUseInit: document.getElementById('qwenUseInit').checked,
+        ref3On: ref3On,
+        ref4On: ref4On,
       };
     }
 
@@ -921,6 +1016,13 @@
       if (typeof form.enableHr === 'boolean') {
         document.getElementById('enableHr').checked = form.enableHr;
       }
+      if (typeof form.qwenUseInit === 'boolean') {
+        document.getElementById('qwenUseInit').checked = form.qwenUseInit;
+      }
+      if (typeof form.ref3On === 'boolean') ref3On = form.ref3On;
+      if (typeof form.ref4On === 'boolean') ref4On = form.ref4On;
+      syncRefChrome();
+      syncSizeReadout();
     }
 
     let savedDesigner = {};
@@ -1244,10 +1346,162 @@
       persistSession();
     }
 
-    function applyPreset(val) {
+    function megapixels(w, h) {
+      const mp = (Number(w) * Number(h)) / 1000000;
+      if (!Number.isFinite(mp) || mp <= 0) return '';
+      return mp.toFixed(2) + ' MP';
+    }
+
+    let sizeRotated = false;
+
+    function aspectLabel(w, h) {
+      const named = [
+        [1, 1], [5, 4], [4, 3], [3, 2], [16, 9], [2, 1], [21, 9],
+        [4, 5], [3, 4], [2, 3], [9, 16], [1, 2], [9, 21],
+      ];
+      const ratio = w / h;
+      let best = null;
+      let err = 0.08;
+      named.forEach(([a, b]) => {
+        const delta = Math.abs(ratio - a / b);
+        if (delta < err) {
+          err = delta;
+          best = a + ':' + b;
+        }
+      });
+      if (best) return best;
+      const gcd = (a, b) => b ? gcd(b, a % b) : a;
+      const div = gcd(w, h) || 1;
+      return (w / div) + ':' + (h / div);
+    }
+
+    function isFlux2Dev() {
+      const name = connectedModel.toLowerCase();
+      return (name.includes('flux2') || name.includes('flux.2') || name.includes('flux-2') || name.includes('f2dev'))
+        && name.includes('dev');
+    }
+
+    function isSd14() {
+      const name = connectedModel.toLowerCase();
+      if (name.includes('xl') || name.includes('sd3') || name.includes('sd-3')) return false;
+      return name.includes('1.4') || name.includes('1-4') || name.includes('v1_4') || name.includes('v1-4');
+    }
+
+    function sizeProfile() {
+      if (isH3()) {
+        return {
+          label: 'MiniMax-H3',
+          rotate: false,
+          groups: [
+            { title: 'Preview', sizes: [[864, 480], [640, 640]] },
+            { title: 'Native', sizes: [[1344, 768]] },
+          ],
+        };
+      }
+      if (isQwenImage21()) {
+        return {
+          label: 'Qwen Image 2.1',
+          rotate: true,
+          groups: [
+            { title: '1K', sizes: [[1024, 1024], [1184, 896], [1264, 848], [1376, 768]] },
+            { title: 'Native 2K', sizes: [[2048, 2048], [2400, 1792], [2528, 1696], [2752, 1536]] },
+          ],
+        };
+      }
+      if (isAnima11()) {
+        return {
+          label: 'Anima 1.1',
+          rotate: true,
+          groups: [
+            { title: '1 MP', sizes: [[1024, 1024], [1152, 896], [1216, 832], [1344, 768]] },
+          ],
+        };
+      }
+      if (isFlux2Dev()) {
+        return {
+          label: 'Flux.2 dev',
+          rotate: true,
+          groups: [
+            { title: '1 MP', sizes: [[1024, 1024], [1152, 896], [1216, 832], [1344, 768], [1536, 640]] },
+          ],
+        };
+      }
+      return {
+        label: (!connectedModel || isSd14()) ? 'SD 1.4' : '512',
+        rotate: true,
+        groups: [
+          { title: '512', sizes: [[512, 512], [768, 512], [640, 640], [768, 768]] },
+        ],
+      };
+    }
+
+    function rebuildSizeCalc() {
+      const host = document.getElementById('sizeGroups');
+      const profile = sizeProfile();
+      const name = document.getElementById('sizeProfile');
+      const rotateBtn = document.getElementById('sizeRotate');
+      if (name) name.textContent = profile.label;
+      if (rotateBtn) {
+        rotateBtn.hidden = !profile.rotate;
+        rotateBtn.classList.toggle('is-on', !!(profile.rotate && sizeRotated));
+      }
+      if (!host) return;
+      const turned = !!(profile.rotate && sizeRotated);
+      host.replaceChildren();
+      profile.groups.forEach(group => {
+        const wrap = document.createElement('div');
+        wrap.className = 'size-group';
+        const title = document.createElement('div');
+        title.className = 'size-group-title';
+        title.textContent = group.title;
+        const grid = document.createElement('div');
+        grid.className = 'size-grid';
+        group.sizes.forEach(([w, h]) => {
+          const flip = turned && w !== h;
+          const dw = flip ? h : w;
+          const dh = flip ? w : h;
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'size-chip';
+          if (flip) button.classList.add('is-rotated');
+          button.dataset.size = dw + 'x' + dh;
+          button.innerHTML = '<span class="ratio">' + aspectLabel(dw, dh) + '</span>'
+            + '<span class="dims">' + dw + '×' + dh + '</span>'
+            + '<span class="mp">' + megapixels(dw, dh) + '</span>';
+          button.addEventListener('click', () => applySizeChoice(dw + 'x' + dh));
+          grid.appendChild(button);
+        });
+        wrap.append(title, grid);
+        host.appendChild(wrap);
+      });
+      syncSizeReadout();
+      syncSizeSelection();
+    }
+
+    function syncSizeReadout() {
+      const label = document.getElementById('sizeMp');
+      if (!label) return;
+      label.textContent = megapixels(
+        document.getElementById('width').value,
+        document.getElementById('height').value
+      );
+    }
+
+    function syncSizeSelection() {
+      const current = document.getElementById('width').value + 'x' + document.getElementById('height').value;
+      document.querySelectorAll('.size-chip').forEach(chip => {
+        chip.classList.toggle('is-on', chip.dataset.size === current);
+      });
+    }
+
+    function applySizeChoice(val) {
+      if (!val) return;
       const [w, h] = val.split('x').map(Number);
+      if (!w || !h) return;
       document.getElementById('width').value = w;
       document.getElementById('height').value = h;
+      syncSizeReadout();
+      syncSizeSelection();
       persistSession();
       if (isI2i()) updateI2iPreview();
     }
@@ -1629,6 +1883,11 @@
       return name.includes('anima') && name.includes('1.1');
     }
 
+    function isQwenImage21() {
+      const name = connectedModel.toLowerCase();
+      return name.includes('qwen') && name.includes('2.1');
+    }
+
     function isRef2va() {
       return connectedModel.toLowerCase().includes('ref2va');
     }
@@ -1643,7 +1902,7 @@
     }
 
     function syncNagControls() {
-      const on = !isH3() && !isAnima11();
+      const on = !isH3() && !isAnima11() && !isQwenImage21();
       const prompt = document.getElementById('nagPrompt');
       if (!on) {
         prompt.value = '';
@@ -1694,12 +1953,12 @@
     }
 
     function snapH3Inputs() {
+      if (!isH3()) return;
       const frames = document.getElementById('videoFrames');
       if (frames) {
         const aligned = alignVideoFrames(frames.value);
         if (String(aligned) !== frames.value) frames.value = String(aligned);
       }
-      if (!isH3()) return;
       ['width', 'height'].forEach(id => {
         const el = document.getElementById(id);
         const aligned = align32(el.value);
@@ -1714,9 +1973,12 @@
       mode.options[1].text = h3 ? 'i2v' : 'i2i';
       document.getElementById('genBtn').textContent = h3 ? 'Generate Video' : 'Generate Image';
       const framesGroup = document.getElementById('videoFramesGroup');
+      const frames = document.getElementById('videoFrames');
       if (framesGroup) framesGroup.hidden = !h3;
-      document.getElementById('width').step = h3 ? '32' : '64';
-      document.getElementById('height').step = h3 ? '32' : '64';
+      if (frames) frames.disabled = !h3;
+      const step = (h3 || isQwenImage21()) ? '32' : '64';
+      document.getElementById('width').step = step;
+      document.getElementById('height').step = step;
       const strength = document.getElementById('i2iStrength');
       const strengthNum = document.getElementById('i2iStrengthNum');
       const strengthGroup = document.getElementById('i2iStrengthGroup');
@@ -1744,6 +2006,8 @@
         setSteppedEnabled('i2iStrengthNum', true);
         h3AppliedFor = null;
       }
+      rebuildSizeCalc();
+      syncRefChrome();
     }
 
     function defaultScheduleKind() {
@@ -1827,6 +2091,11 @@
 
     let i2iSource = null;
     let i2iSourceUrl = null;
+    let refPage = 0;
+    let refSources = [null, null, null];
+    let refSourceUrls = [null, null, null];
+    let ref3On = false;
+    let ref4On = false;
 
     function isI2i() {
       return document.getElementById('genMode').value === 'i2i';
@@ -1961,21 +2230,92 @@
       if (!isI2i()) return;
       const canvas = document.getElementById('i2iPreview');
       if (!canvas) return;
-      const size = i2iOutputSize();
+      const refImage = isQwenImage21() && refPage > 0 ? refSources[refPage - 1] : null;
+      const showingRef = isQwenImage21() && refPage > 0;
+      const size = showingRef
+        ? {
+          w: refImage && refImage.naturalWidth ? refImage.naturalWidth : 320,
+          h: refImage && refImage.naturalHeight ? refImage.naturalHeight : 180,
+        }
+        : i2iOutputSize();
       const box = i2iPreviewBox(size.w, size.h);
       canvas.style.width = box.cssW + 'px';
       canvas.style.height = box.cssH + 'px';
       if (canvas.width !== box.bufW) canvas.width = box.bufW;
       if (canvas.height !== box.bufH) canvas.height = box.bufH;
       const ctx = softwareCtx(canvas);
-      const img = i2iSource;
+      const img = showingRef ? refImage : i2iSource;
       if (!img || !img.naturalWidth) {
         ctx.fillStyle = '#11141c';
         ctx.fillRect(0, 0, box.bufW, box.bufH);
         return;
       }
-      const mode = i2iDim();
+      const mode = showingRef ? 'stretch' : i2iDim();
       paintI2i(ctx, img, box.bufW, box.bufH, mode === 'source' ? 'stretch' : mode);
+    }
+
+    function currentSlot() {
+      return isQwenImage21() ? refPage : 0;
+    }
+
+    function setSlotImage(img, url) {
+      const slot = currentSlot();
+      if (slot === 0) {
+        rememberI2iSource(img, url);
+        return;
+      }
+      const index = slot - 1;
+      if (refSourceUrls[index] && refSourceUrls[index] !== url) URL.revokeObjectURL(refSourceUrls[index]);
+      refSourceUrls[index] = url || null;
+      refSources[index] = img;
+      syncI2i();
+      updateI2iPreview();
+    }
+
+    function qwenRefsToSend() {
+      const images = [];
+      if (refSources[0]) images.push(refSources[0]);
+      if (ref3On && refSources[1]) images.push(refSources[1]);
+      if (ref4On && refSources[2]) images.push(refSources[2]);
+      return images;
+    }
+
+    function qwenI2iReady() {
+      const useInit = document.getElementById('qwenUseInit').checked && i2iSource;
+      return !!(useInit || qwenRefsToSend().length);
+    }
+
+    function syncRefChrome() {
+      const qwenModel = isQwenImage21();
+      const qwen = qwenModel && isI2i();
+      const pager = document.getElementById('refPager');
+      if (!qwenModel) refPage = 0;
+      if (pager) pager.hidden = !qwen;
+      const main = refPage === 0;
+      const strengthGroup = document.getElementById('i2iStrengthGroup');
+      const dimGroup = document.getElementById('i2iDimGroup');
+      if (strengthGroup) strengthGroup.hidden = qwen && !main;
+      if (dimGroup) dimGroup.hidden = qwen && !main;
+      const initLabel = document.getElementById('qwenUseInitLabel');
+      if (initLabel) initLabel.hidden = !(qwen && main);
+      const includeLabel = document.getElementById('refIncludeLabel');
+      const showInclude = qwen && refPage >= 2;
+      if (includeLabel) includeLabel.hidden = !showInclude;
+      if (showInclude) {
+        document.getElementById('refInclude').checked = refPage === 2 ? ref3On : ref4On;
+      }
+      const names = ['Main', 'Reference 1', 'Reference 2', 'Reference 3'];
+      const label = document.getElementById('refPageLabel');
+      if (label) label.textContent = (refPage + 1) + ' / 4 · ' + names[refPage];
+    }
+
+    function stepRefPage(dir) {
+      if (!isQwenImage21()) return;
+      refPage = (refPage + dir + 4) % 4;
+      const file = document.getElementById('i2iFile');
+      if (file) file.value = '';
+      syncRefChrome();
+      updateI2iPreview();
     }
 
     function setI2iSource(img) {
@@ -2105,7 +2445,7 @@
       if (!file) return;
       const url = URL.createObjectURL(file);
       const img = new Image();
-      img.onload = () => rememberI2iSource(img, url);
+      img.onload = () => setSlotImage(img, url);
       img.onerror = () => {
         URL.revokeObjectURL(url);
         document.getElementById('status').innerText = 'Could not read that file';
@@ -2129,7 +2469,7 @@
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const url = URL.createObjectURL(await res.blob());
         const img = new Image();
-        img.onload = () => rememberI2iSource(img, url);
+        img.onload = () => setSlotImage(img, url);
         img.onerror = () => {
           URL.revokeObjectURL(url);
           document.getElementById('status').innerText = 'Could not read the shown image';
@@ -2139,6 +2479,14 @@
         document.getElementById('status').innerText = 'Could not read the shown image';
         dlog('use shown failed: ' + (err && err.message ? err.message : err));
       }
+    }
+
+    function nativeImageDataUrl(img) {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      softwareCtx(canvas).drawImage(img, 0, 0);
+      return canvasToPngDataUrl(canvas);
     }
 
     function imageForVideo() {
@@ -2181,11 +2529,13 @@
       const panel = document.getElementById('i2iPanel');
       const on = isI2i();
       panel.hidden = !on;
-      document.getElementById('genBtn').disabled = on && !i2iSource;
-      if (on && i2iSource) {
+      syncRefChrome();
+      const ready = !on || (isQwenImage21() ? qwenI2iReady() : !!i2iSource);
+      document.getElementById('genBtn').disabled = !ready && on;
+      if (on && (i2iSource || (isQwenImage21() && refPage > 0))) {
         updateI2iPreview();
         requestAnimationFrame(() => {
-          if (isI2i() && i2iSource) updateI2iPreview();
+          if (isI2i()) updateI2iPreview();
         });
       }
       drawScheduleChart();
@@ -2300,7 +2650,7 @@
 
     function syncStripThumbs(files) {
       const byName = new Map(files.map(file => [file.name, file]));
-      document.querySelectorAll('#browser button').forEach(btn => {
+      document.querySelectorAll('#browser .thumb-open').forEach(btn => {
         const file = byName.get(btn.dataset.name);
         const label = btn.querySelector('.thumb-label');
         let img = btn.querySelector('img');
@@ -2333,7 +2683,7 @@
 
     function showOutput(name) {
       selectedOutput = name;
-      document.querySelectorAll('#browser button').forEach(btn => {
+      document.querySelectorAll('#browser .thumb-open').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.name === name);
       });
       const gallery = document.getElementById('gallery');
@@ -2380,6 +2730,32 @@
 
     let lastStripNames = '';
 
+    async function deleteOutput(name) {
+      if (!window.confirm('delete ' + name + ' y/n?')) return;
+      const names = [...document.querySelectorAll('#browser .thumb-open')].map(btn => btn.dataset.name);
+      const index = names.indexOf(name);
+      const next = index >= 0 ? (names[index + 1] || names[index - 1] || null) : null;
+      try {
+        const res = await fetch(studioBase + '/files/' + encodeURIComponent(name), { method: 'DELETE' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        dlog('deleted output ' + name);
+        if (selectedOutput === name) {
+          if (next) {
+            selectedOutput = next;
+          } else {
+            selectedOutput = null;
+            document.getElementById('gallery').innerHTML = '';
+          }
+          await refreshBrowser(next);
+          return;
+        }
+        await refreshBrowser();
+      } catch (err) {
+        setStatusText('Could not delete output: ' + (err && err.message ? err.message : err), false);
+      }
+    }
+
     async function refreshBrowser(selectName) {
       const browser = document.getElementById('browser');
       try {
@@ -2403,8 +2779,11 @@
           dlog('refresh browser ' + files.length + ' files' + (selectName ? ', select ' + selectName : ''));
           browser.innerHTML = '';
           files.forEach(file => {
+            const item = document.createElement('div');
+            item.className = 'thumb-item';
             const btn = document.createElement('button');
             btn.type = 'button';
+            btn.className = 'thumb-open';
             btn.dataset.name = file.name;
             btn.title = file.name;
             btn.classList.toggle('active', file.name === selectedOutput);
@@ -2417,7 +2796,18 @@
               autoShowResult = false;
               showOutput(file.name);
             });
-            browser.appendChild(btn);
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'btn-secondary thumb-delete';
+            remove.textContent = 'x';
+            remove.title = 'Delete ' + file.name;
+            remove.addEventListener('click', (ev) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+              void deleteOutput(file.name);
+            });
+            item.append(btn, remove);
+            browser.appendChild(item);
           });
         }
         syncStripThumbs(files);
@@ -2684,7 +3074,32 @@
       const status = document.getElementById('status');
       const payload = collectPayload();
       try {
-        if (payload.i2i) {
+        if (payload.i2i && isQwenImage21()) {
+          const useInit = document.getElementById('qwenUseInit').checked && i2iSource;
+          const refs = qwenRefsToSend();
+          if (!useInit && !refs.length) {
+            status.innerText = 'Choose an image';
+            return;
+          }
+          setStatusText('Preparing i2i…', false);
+          await new Promise(resolve => setTimeout(resolve, 0));
+          if (useInit) {
+            const canvas = composeI2iCanvas();
+            if (!canvas) {
+              status.innerText = 'Choose an image';
+              return;
+            }
+            payload.init_images = [await canvasToPngDataUrl(canvas)];
+            payload.width = canvas.width;
+            payload.height = canvas.height;
+          } else {
+            payload.i2i = false;
+          }
+          if (refs.length) {
+            payload.extra_images = [];
+            for (const img of refs) payload.extra_images.push(await nativeImageDataUrl(img));
+          }
+        } else if (payload.i2i) {
           const canvas = composeI2iCanvas();
           if (!canvas) {
             status.innerText = 'Choose an image for i2i';
@@ -2778,12 +3193,16 @@
     controls.addEventListener('input', () => {
       persistSession();
       drawScheduleChart();
+      syncSizeReadout();
+      syncSizeSelection();
       if (isI2i() && i2iSource) updateI2iPreview();
     });
     controls.addEventListener('change', () => {
       snapH3Inputs();
       persistSession();
       drawScheduleChart();
+      syncSizeReadout();
+      syncSizeSelection();
       if (isI2i() && i2iSource) updateI2iPreview();
     });
     restoreClientLog();
@@ -2811,9 +3230,21 @@
     document.getElementById('loadPromptShownBtn').addEventListener('click', () => {
       void loadPromptFromShown();
     });
+    document.getElementById('sizeRotate').addEventListener('click', () => {
+      sizeRotated = !sizeRotated;
+      rebuildSizeCalc();
+    });
     restoreSession();
+    rebuildSizeCalc();
     syncI2i();
     syncDesigner();
+    document.getElementById('qwenUseInit').addEventListener('change', () => syncI2i());
+    document.getElementById('refInclude').addEventListener('change', () => {
+      const on = document.getElementById('refInclude').checked;
+      if (refPage === 2) ref3On = on;
+      if (refPage === 3) ref4On = on;
+      syncI2i();
+    });
     document.getElementById('saveSettingsOverlay').addEventListener('click', (ev) => {
       if (ev.target === ev.currentTarget) cancelSaveSettings();
     });
