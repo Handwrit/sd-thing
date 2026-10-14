@@ -399,11 +399,23 @@
       gap: 0.75rem;
     }
 
+    .gen-top {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 0.28rem;
+      background: var(--bg);
+      padding-bottom: 0.15rem;
+    }
     .gen-actions {
       display: flex;
       gap: 0.5rem;
       align-items: stretch;
     }
+    .prompt-actions { margin-top: 0.4rem; }
+    .prompt-actions button { flex: 1; }
     .settings-save { width: 100%; margin-top: 5px; }
     .settings-list {
       display: flex;
@@ -587,24 +599,27 @@
       border-radius: 8px;
     }
     .status {
-      position: absolute;
-      bottom: 1rem;
-      font-size: 0.85rem;
+      font-size: 0.72rem;
+      line-height: 1.3;
       color: var(--muted);
+      min-height: 0.95rem;
     }
     .status.live {
-      color: #fff;
-      background: #2563eb;
-      padding: 0.28rem 0.7rem;
-      border-radius: 6px;
-      font-weight: 650;
-      letter-spacing: 0.02em;
+      color: var(--text);
     }
   </style>
 </head>
 <body>
 
   <div class="controls">
+    <div class="gen-top">
+      <div id="status" class="status">Ready (Target: Port 1493, ComfyUI RNG)</div>
+      <div class="gen-actions">
+        <button id="cancelBtn" class="btn-cancel" type="button" disabled onclick="cancelCurrent()">Cancel</button>
+        <button id="genBtn" class="btn-primary" type="button" onclick="enqueueGenerate()">Generate Image</button>
+      </div>
+    </div>
+
     <div class="field-group">
       <label>Queue</label>
       <div id="queueList" class="queue-list"></div>
@@ -613,10 +628,15 @@
     <div class="field-group">
       <label>Prompt</label>
       <textarea id="prompt" placeholder="A cozy cabin in the misty pine forest...">a cinematic shot of an ancient library, dust motes in sunbeams, hyperrealistic, octane render</textarea>
-      <div class="row" style="margin-top: 0.4rem;">
+      <div class="row prompt-actions">
         <button class="btn-secondary" type="button" id="loadPromptBtn">Load prompt</button>
         <button class="btn-secondary" type="button" id="loadPromptShownBtn">From shown</button>
         <input type="file" id="loadPromptFile" accept="image/png,.png" hidden />
+      </div>
+      <div class="row prompt-actions">
+        <button class="btn-secondary" type="button" id="loadAllBtn">Load all</button>
+        <button class="btn-secondary" type="button" id="loadAllShownBtn">Add all from shown</button>
+        <input type="file" id="loadAllFile" accept="image/png,.png" hidden />
       </div>
     </div>
 
@@ -751,10 +771,10 @@
         <label>Sampler</label>
         <select id="sampler">
           <option value="euler" selected>Euler</option>
-          <option value="euler_a">Euler a (crashes on this GPU)</option>
+          <option value="euler_a">Euler a</option>
           <option value="dpm++2m">DPM++ 2M</option>
           <option value="dpm++2s_a">DPM++ 2S a</option>
-          <option value="heun">Heun (crashes on this GPU)</option>
+          <option value="heun">Heun</option>
           <option value="lcm">LCM</option>
           <option value="ddim_trailing">DDIM</option>
         </select>
@@ -830,11 +850,6 @@
       <button class="btn-secondary settings-save" type="button" onclick="openSaveSettings()">Save settings</button>
     </div>
 
-    <div class="gen-actions">
-      <button id="cancelBtn" class="btn-cancel" type="button" disabled onclick="cancelCurrent()">Cancel</button>
-      <button id="genBtn" class="btn-primary" type="button" onclick="enqueueGenerate()">Generate Image</button>
-    </div>
-
     <div id="designerPanel" class="designer disabled">
       <label>Schedule Designer</label>
       <select id="designerFormula" onchange="syncDesigner()">
@@ -869,7 +884,6 @@
   <div class="stage">
     <div class="viewport">
       <div id="gallery" class="gallery"></div>
-      <div id="status" class="status">Ready (Target: Port 1493, ComfyUI RNG)</div>
     </div>
     <div class="stage-bottom">
       <div class="browser-wrap">
@@ -1165,11 +1179,19 @@
         if (data.designer && typeof data.designer === 'object') savedDesigner = data.designer;
         if (data.form) delete data.form.seed;
         applyFormState(data.form);
+        const savedMode = data.form && data.form.genMode;
+        const presetI2iWithoutImage = savedMode === 'i2i' && !i2iImageLoaded();
+        if (presetI2iWithoutImage) {
+          document.getElementById('genMode').value = 't2i';
+        }
         syncDesigner();
         syncConnectedModel();
         syncI2i();
         snapH3Inputs();
         dlog('loaded settings ' + name);
+        if (presetI2iWithoutImage) {
+          setStatusText('Loaded ' + name + ' (saved as i2i; no init image stored)', false);
+        }
       } catch (err) {
         setStatusText('Could not load settings: ' + (err && err.message ? err.message : err), false);
       }
@@ -2101,6 +2123,10 @@
       return document.getElementById('genMode').value === 'i2i';
     }
 
+    function i2iImageLoaded() {
+      return !!i2iSource || (isQwenImage21() && qwenI2iReady());
+    }
+
     function i2iDim() {
       const picked = document.querySelector('input[name="i2iDim"]:checked');
       return picked ? picked.value : 'source';
@@ -2400,6 +2426,16 @@
       };
     }
 
+    function applyParsedPrompts(parsed, replaceEmpty) {
+      document.getElementById('prompt').value = parsed.positive;
+      if (typeof parsed.negative === 'string' && (replaceEmpty || parsed.negative.trim() !== '')) {
+        document.getElementById('negPrompt').value = parsed.negative;
+      }
+      if (typeof parsed.nag === 'string' && (replaceEmpty || parsed.nag.trim() !== '')) {
+        document.getElementById('nagPrompt').value = parsed.nag;
+      }
+    }
+
     function applyPngPromptBytes(buffer, label) {
       let text = null;
       try {
@@ -2412,33 +2448,319 @@
         setStatusText('No prompt metadata in that PNG', false);
         return false;
       }
-      document.getElementById('prompt').value = parsed.positive;
-      if (typeof parsed.negative === 'string' && parsed.negative.trim() !== '') {
-        document.getElementById('negPrompt').value = parsed.negative;
-      }
-      if (typeof parsed.nag === 'string' && parsed.nag.trim() !== '') {
-        document.getElementById('nagPrompt').value = parsed.nag;
-      }
+      applyParsedPrompts(parsed, false);
       persistSession();
       setStatusText('Loaded prompt from ' + label, false);
       return true;
     }
 
-    async function loadPromptFromShown() {
+    function fieldAfter(text, label) {
+      const at = text.indexOf(label);
+      if (at < 0) return null;
+      const start = at + label.length;
+      const comma = text.indexOf(',', start);
+      const raw = (comma < 0 ? text.slice(start) : text.slice(start, comma)).trim();
+      return raw || null;
+    }
+
+    function parseExtraArgs(text) {
+      const out = {};
+      String(text || '').split(',').forEach(part => {
+        const eq = part.indexOf('=');
+        if (eq <= 0) return;
+        const key = part.slice(0, eq).trim();
+        if (!key) return;
+        out[key] = part.slice(eq + 1).trim();
+      });
+      return out;
+    }
+
+    function selectHasValue(id, value) {
+      const el = document.getElementById(id);
+      if (!el || value == null || value === '') return false;
+      return Array.from(el.options).some(opt => opt.value === String(value));
+    }
+
+    function setNumericFields(ids, value) {
+      const n = Number(value);
+      if (!Number.isFinite(n)) return false;
+      const text = String(n);
+      ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = text;
+      });
+      return true;
+    }
+
+    function parseSdcppRecord(text) {
+      const marker = ', SDCPP: ';
+      const at = text.lastIndexOf(marker);
+      if (at < 0) return null;
+      try {
+        const data = JSON.parse(text.slice(at + marker.length).trim());
+        return data && typeof data === 'object' ? data : null;
+      } catch (err) {
+        return null;
+      }
+    }
+
+    function applyNagArgs(extra) {
+      setNumericFields(['nagScale'], extra.nag_scale);
+      setNumericFields(['nagTau'], extra.nag_tau);
+      setNumericFields(['nagAlpha'], extra.nag_alpha);
+      setNumericFields(['nagSigmaEnd'], extra.nag_sigma_end);
+    }
+
+    function applyGenerationRecord(record) {
+      const sampling = record.sampling && typeof record.sampling === 'object' ? record.sampling : {};
+      const guidance = sampling.guidance && typeof sampling.guidance === 'object' ? sampling.guidance : {};
+      setNumericFields(['steps', 'stepsNum'], sampling.steps);
+      setNumericFields(['cfg', 'cfgNum'], guidance.txt_cfg);
+      setNumericFields(['seed'], record.seed);
+      setNumericFields(['width'], record.width);
+      setNumericFields(['height'], record.height);
+      if (record.clip_skip != null && Number(record.clip_skip) > 0) {
+        setNumericFields(['clipSkip'], record.clip_skip);
+      }
+      if (selectHasValue('sampler', sampling.method)) {
+        document.getElementById('sampler').value = sampling.method;
+      }
+      const extra = parseExtraArgs(sampling.extra_sample_args);
+      applyNagArgs(extra);
+      const hasScheduler = Object.prototype.hasOwnProperty.call(sampling, 'scheduler');
+      const schedulerName = typeof sampling.scheduler === 'string' ? sampling.scheduler : '';
+      const designerFields = DESIGNER_FIELDS[schedulerName] || [];
+      const hasDesigner = designerFields.some(field => Object.prototype.hasOwnProperty.call(extra, field.key));
+      if (hasDesigner) {
+        document.getElementById('scheduler').value = DESIGNER_SENTINEL;
+        if (selectHasValue('designerFormula', schedulerName)) {
+          document.getElementById('designerFormula').value = schedulerName;
+        }
+        designerFields.forEach(field => {
+          if (!Object.prototype.hasOwnProperty.call(extra, field.key)) return;
+          savedDesigner[schedulerName + '.' + field.key] = field.type === 'bool'
+            ? extra[field.key] === 'true'
+            : extra[field.key];
+        });
+      } else if (hasScheduler && selectHasValue('scheduler', schedulerName)) {
+        document.getElementById('scheduler').value = schedulerName;
+      } else if (!hasScheduler) {
+        document.getElementById('scheduler').value = '';
+      }
+      if (record.hires && typeof record.hires === 'object') {
+        document.getElementById('enableHr').checked = !!record.hires.enabled;
+        setNumericFields(['hrScale'], record.hires.scale);
+        setNumericFields(['hrSteps'], record.hires.steps);
+        setNumericFields(['hrDenoise', 'hrDenoiseNum'], record.hires.denoising_strength);
+      } else {
+        document.getElementById('enableHr').checked = false;
+      }
+      if (record.video && record.video.frame_count != null) {
+        setNumericFields(['videoFrames'], record.video.frame_count);
+      }
+      const strength = Number(record.strength);
+      if (!Number.isFinite(strength)) return false;
+      setNumericFields(['i2iStrength', 'i2iStrengthNum'], strength);
+      return strength < 0.999;
+    }
+
+    function applyTextGenerationLine(text) {
+      setNumericFields(['steps', 'stepsNum'], fieldAfter(text, 'Steps: '));
+      setNumericFields(['cfg', 'cfgNum'], fieldAfter(text, 'CFG scale: '));
+      setNumericFields(['seed'], fieldAfter(text, 'Seed: '));
+      const size = fieldAfter(text, 'Size: ');
+      if (size && size.includes('x')) {
+        const parts = size.split('x');
+        setNumericFields(['width'], parts[0]);
+        setNumericFields(['height'], parts[1]);
+      }
+      const samplerField = fieldAfter(text, 'Sampler: ');
+      if (samplerField) {
+        const parts = samplerField.split(/\s+/);
+        if (selectHasValue('sampler', parts[0])) document.getElementById('sampler').value = parts[0];
+        if (parts[1] && selectHasValue('scheduler', parts[1])) {
+          document.getElementById('scheduler').value = parts[1];
+        }
+      }
+      const clip = fieldAfter(text, 'Clip skip: ');
+      if (clip) setNumericFields(['clipSkip'], clip);
+      const extra = fieldAfter(text, 'Extra sample args: ');
+      if (extra) applyNagArgs(parseExtraArgs(extra));
+    }
+
+    function readPngSourceImages(buffer) {
+      const bytes = new Uint8Array(buffer);
+      const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+      if (bytes.length < 8 || sig.some((b, i) => bytes[i] !== b)) return [];
+      const view = new DataView(buffer);
+      let offset = 8;
+      let chunk = null;
+      while (offset + 12 <= bytes.length) {
+        const length = view.getUint32(offset);
+        const type = String.fromCharCode(
+          bytes[offset + 4], bytes[offset + 5], bytes[offset + 6], bytes[offset + 7]
+        );
+        const dataStart = offset + 8;
+        const dataEnd = dataStart + length;
+        if (dataEnd + 4 > bytes.length) return [];
+        if (type === 'sdIs') chunk = bytes.slice(dataStart, dataEnd);
+        if (type === 'IEND') break;
+        offset = dataEnd + 4;
+      }
+      if (!chunk || chunk.length < 3 || chunk[0] !== 1) return [];
+      const chunkView = new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+      const count = chunkView.getUint16(1);
+      const images = [];
+      let cursor = 3;
+      for (let i = 0; i < count; i++) {
+        if (cursor + 6 > chunk.length) break;
+        const role = chunk[cursor];
+        const index = chunk[cursor + 1];
+        const length = chunkView.getUint32(cursor + 2);
+        cursor += 6;
+        if (length > chunk.length - cursor) break;
+        const png = chunk.slice(cursor, cursor + length);
+        cursor += length;
+        if (png.length >= 8 && png[0] === 137) images.push({ role, index, png });
+      }
+      return images;
+    }
+
+    function loadRecoveredPng(slot, pngBytes) {
+      const blob = new Blob([pngBytes], { type: 'image/png' });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => {
+        if (slot === 0) {
+          rememberI2iSource(img, url);
+          return;
+        }
+        const index = slot - 1;
+        if (index < 0 || index >= refSources.length) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        if (refSourceUrls[index] && refSourceUrls[index] !== url) URL.revokeObjectURL(refSourceUrls[index]);
+        refSourceUrls[index] = url;
+        refSources[index] = img;
+        if (index === 1) ref3On = true;
+        if (index === 2) ref4On = true;
+        syncI2i();
+        updateI2iPreview();
+      };
+      img.onerror = () => URL.revokeObjectURL(url);
+      img.src = url;
+    }
+
+    function recoverSourceImages(images) {
+      const init = images.find(image => image.role === 1);
+      const refs = images.filter(image => image.role === 2).sort((a, b) => a.index - b.index);
+      let placed = 0;
+      if (init) {
+        document.getElementById('genMode').value = 'i2i';
+        if (isQwenImage21()) document.getElementById('qwenUseInit').checked = true;
+        loadRecoveredPng(0, init.png);
+        placed++;
+      }
+      if (isQwenImage21()) {
+        if (!init && refs.length) document.getElementById('qwenUseInit').checked = false;
+        refs.forEach((image, index) => {
+          if (index > 2) return;
+          document.getElementById('genMode').value = 'i2i';
+          loadRecoveredPng(index + 1, image.png);
+          placed++;
+        });
+      } else if (!init && refs.length) {
+        document.getElementById('genMode').value = 'i2i';
+        loadRecoveredPng(0, refs[0].png);
+        placed++;
+      }
+      return placed;
+    }
+
+    function recordIsFlux(record) {
+      if (!record || typeof record !== 'object') return false;
+      const models = record.models && typeof record.models === 'object' ? record.models : {};
+      return Object.values(models).some(name => typeof name === 'string' && name.toLowerCase().includes('flux'));
+    }
+
+    function applyPngAllBytes(buffer, label) {
+      let text = null;
+      try {
+        text = readPngParameters(buffer);
+      } catch (err) {
+        text = null;
+      }
+      const parsed = text == null || text.trim() === '' ? null : parseParametersText(text);
+      const record = text ? parseSdcppRecord(text) : null;
+      const sources = readPngSourceImages(buffer);
+      if ((!parsed || typeof parsed.positive !== 'string') && !record && !sources.length) {
+        setStatusText('No generation metadata in that PNG', false);
+        return false;
+      }
+      if (parsed && typeof parsed.positive === 'string') applyParsedPrompts(parsed, true);
+      const nagInJson = !!(record && record.prompt && typeof record.prompt.nag === 'string' && record.prompt.nag.trim() !== '');
+      if (recordIsFlux(record) && !nagInJson) {
+        document.getElementById('nagPrompt').value = '';
+      }
+      const missingInit = record ? applyGenerationRecord(record) : false;
+      if (!record && text) applyTextGenerationLine(text);
+      const recovered = recoverSourceImages(sources);
+      syncDesigner();
+      syncSizeReadout();
+      syncSizeSelection();
+      drawScheduleChart();
+      syncI2i();
+      let note = '';
+      if (recovered) note = ' (' + recovered + ' source image' + (recovered === 1 ? '' : 's') + ')';
+      else if (missingInit) note = ' (init image is not in the file)';
+      setStatusText('Loaded settings from ' + label + note, false);
+      return true;
+    }
+
+    async function fetchShownPng() {
       const shown = document.querySelector('#gallery img');
       const name = shown && shown.dataset.name;
-      if (!name || isVideoName(name)) {
-        setStatusText('No PNG is shown', false);
-        return;
-      }
+      if (!name || isVideoName(name)) return null;
+      const res = await fetch(studioBase + '/files/' + encodeURIComponent(name), { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return { name, buffer: await res.arrayBuffer() };
+    }
+
+    async function loadPromptFromShown() {
       try {
-        const res = await fetch(studioBase + '/files/' + encodeURIComponent(name), { cache: 'no-store' });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        await applyPngPromptBytes(await res.arrayBuffer(), name);
+        const shown = await fetchShownPng();
+        if (!shown) {
+          setStatusText('No PNG is shown', false);
+          return;
+        }
+        applyPngPromptBytes(shown.buffer, shown.name);
       } catch (err) {
         setStatusText('Could not read the shown image', false);
         dlog('load prompt shown failed: ' + (err && err.message ? err.message : err));
       }
+    }
+
+    async function loadAllFromShown() {
+      try {
+        const shown = await fetchShownPng();
+        if (!shown) {
+          setStatusText('No PNG is shown', false);
+          return;
+        }
+        applyPngAllBytes(shown.buffer, shown.name);
+      } catch (err) {
+        setStatusText('Could not read the shown image', false);
+        dlog('load all shown failed: ' + (err && err.message ? err.message : err));
+      }
+    }
+
+    function readPngFile(file, apply) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => apply(reader.result, file.name);
+      reader.onerror = () => setStatusText('Could not read that file', false);
+      reader.readAsArrayBuffer(file);
     }
 
     function loadI2iFile(file) {
@@ -3220,15 +3542,21 @@
       input.click();
     });
     document.getElementById('loadPromptFile').addEventListener('change', (ev) => {
-      const file = ev.target.files && ev.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => applyPngPromptBytes(reader.result, file.name);
-      reader.onerror = () => setStatusText('Could not read that file', false);
-      reader.readAsArrayBuffer(file);
+      readPngFile(ev.target.files && ev.target.files[0], applyPngPromptBytes);
     });
     document.getElementById('loadPromptShownBtn').addEventListener('click', () => {
       void loadPromptFromShown();
+    });
+    document.getElementById('loadAllBtn').addEventListener('click', () => {
+      const input = document.getElementById('loadAllFile');
+      input.value = '';
+      input.click();
+    });
+    document.getElementById('loadAllFile').addEventListener('change', (ev) => {
+      readPngFile(ev.target.files && ev.target.files[0], applyPngAllBytes);
+    });
+    document.getElementById('loadAllShownBtn').addEventListener('click', () => {
+      void loadAllFromShown();
     });
     document.getElementById('sizeRotate').addEventListener('click', () => {
       sizeRotated = !sizeRotated;

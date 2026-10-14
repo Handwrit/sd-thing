@@ -336,5 +336,6 @@ std::string get_image_params(const SDContextParams& ctx_params,
                              const SDGenerationParams& gen_params,
                              int64_t seed,
                              SDMode mode = IMG_GEN);
+void embed_output_source_images(const std::string& path, const SDGenerationParams& gen_params);
 
 #endif  // __EXAMPLES_COMMON_COMMON_H__

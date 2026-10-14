@@ -291,6 +291,7 @@ bool execute_img_gen_job(ServerRuntime& runtime,
         output_images.push_back(base64_encode(image_bytes));
         std::string saved_path = save_generated_image(runtime, results[i], metadata);
         if (!saved_path.empty()) {
+            embed_output_source_images(saved_path, job.img_gen.gen_params);
             job.result_output_files.push_back(saved_path);
         }
     }
@@ -343,6 +344,9 @@ bool execute_vid_gen_job(ServerRuntime& runtime,
     if (version_name != nullptr && std::strcmp(version_name, "MiniMax-H3") == 0) {
         free_sd_audio(generated_audio);
         job.result_output_files = save_generated_frames(runtime, results.data(), num_results, str_params);
+        if (!job.result_output_files.empty()) {
+            embed_output_source_images(job.result_output_files.front(), job.vid_gen.gen_params);
+        }
         if (job.result_output_files.empty()) {
             error_message = "failed to save generated frames";
             return false;

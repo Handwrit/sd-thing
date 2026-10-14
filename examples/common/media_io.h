@@ -32,6 +32,24 @@ bool write_image_to_file(const std::string& path,
                          const std::string& parameters = "",
                          int quality                   = 90);
 
+enum class PngSourceRole : uint8_t {
+    Init = 1,
+    Ref  = 2,
+};
+
+struct PngSourceImage {
+    PngSourceRole role = PngSourceRole::Init;
+    uint8_t index      = 0;
+    const uint8_t* data = nullptr;
+    int width           = 0;
+    int height          = 0;
+    int channels        = 0;
+};
+
+// Stores source pixels in an ancillary PNG chunk. Viewers ignore it.
+// A failure leaves the original file unchanged.
+bool embed_png_source_images(const std::string& path, const std::vector<PngSourceImage>& images);
+
 uint8_t* load_image_from_file(const char* image_path,
                               int& width,
                               int& height,

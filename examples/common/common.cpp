@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
@@ -3228,4 +3229,69 @@ std::string get_image_params(const SDContextParams& ctx_params,
     parameter_string += "Version: stable-diffusion.cpp";
     parameter_string += ", SDCPP: " + build_sdcpp_image_metadata_json(ctx_params, gen_params, seed, mode);
     return parameter_string;
+}
+
+static bool same_source_pixels(const sd_image_t& left, const sd_image_t& right) {
+    if (left.data == nullptr || right.data == nullptr) {
+        return false;
+    }
+    if (left.data == right.data) {
+        return true;
+    }
+    if (left.width != right.width || left.height != right.height || left.channel != right.channel) {
+        return false;
+    }
+    const size_t bytes = static_cast<size_t>(left.width) * static_cast<size_t>(left.height) * static_cast<size_t>(left.channel);
+    return std::memcmp(left.data, right.data, bytes) == 0;
+}
+
+void embed_output_source_images(const std::string& path, const SDGenerationParams& gen_params) {
+    if (path.empty() || !gen_params.embed_image_metadata) {
+        return;
+    }
+
+    std::vector<PngSourceImage> images;
+    std::vector<sd_image_t> stored;
+    auto push_image = [&](PngSourceRole role, uint8_t index, const sd_image_t& image) {
+        if (image.data == nullptr || images.size() >= 6) {
+            return;
+        }
+        for (const sd_image_t& previous : stored) {
+            if (same_source_pixels(previous, image)) {
+                return;
+            }
+        }
+        images.push_back(PngSourceImage{
+            role,
+            index,
+            image.data,
+            static_cast<int>(image.width),
+            static_cast<int>(image.height),
+            static_cast<int>(image.channel),
+        });
+        stored.push_back(image);
+    };
+
+    push_image(PngSourceRole::Init, 0, gen_params.init_image.get());
+    if (gen_params.ref_images.size() > 6) {
+        LOG_WARN("skipping %zu reference images; too many to store in '%s'",
+                 gen_params.ref_images.size(),
+                 path.c_str());
+    } else {
+        uint8_t index = 0;
+        for (const SDImageOwner& ref : gen_params.ref_images) {
+            push_image(PngSourceRole::Ref, index, ref.get());
+            if (index == 255) {
+                break;
+            }
+            index++;
+        }
+    }
+
+    if (images.empty()) {
+        return;
+    }
+    if (!embed_png_source_images(path, images)) {
+        LOG_WARN("could not store source images in '%s'", path.c_str());
+    }
 }

@@ -419,6 +419,7 @@ void register_sdapi_endpoints(httplib::Server& svr, ServerRuntime& rt) {
 
                 std::string saved_path = save_generated_image(*runtime, results[i], embed_meta ? params : "");
                 if (!saved_path.empty()) {
+                    embed_output_source_images(saved_path, request.gen_params);
                     output_files.push_back(saved_path);
                 }
 

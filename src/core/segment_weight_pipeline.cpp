@@ -166,15 +166,12 @@ namespace sd {
             return;
         }
 
-        DeviceMemoryRequest backend_request        = request;
-        backend_request.compute_backend            = compute_backend_;
-        backend_request.owner_id                   = owner_id_;
-        std::vector<ggml_tensor*> protected_params = segment_params_[segment_index];
-        protected_params.insert(protected_params.end(), params.begin(), params.end());
-        if (!manager->ensure_compute_backend_capacity(backend_request,
-                                                      params,
-                                                      preferred_eviction_order(),
-                                                      protected_params)) {
+        DeviceMemoryRequest backend_request = request;
+        backend_request.compute_backend     = compute_backend_;
+        backend_request.owner_id            = owner_id_;
+        // A miss must not evict. ensure_compute_backend_capacity frees resident
+        // weights before refusing, and those weights then reload on every later step.
+        if (!manager->fits_compute_backend_capacity(backend_request, params)) {
             disable();
             return;
         }

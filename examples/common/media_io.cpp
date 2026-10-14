@@ -774,6 +774,148 @@ bool write_image_to_file(const std::string& path,
     }
 }
 
+static uint32_t png_read_be32(const uint8_t* data) {
+    return (static_cast<uint32_t>(data[0]) << 24) |
+           (static_cast<uint32_t>(data[1]) << 16) |
+           (static_cast<uint32_t>(data[2]) << 8) |
+           static_cast<uint32_t>(data[3]);
+}
+
+static void png_write_be32(std::vector<uint8_t>& out, uint32_t value) {
+    out.push_back(static_cast<uint8_t>((value >> 24) & 0xff));
+    out.push_back(static_cast<uint8_t>((value >> 16) & 0xff));
+    out.push_back(static_cast<uint8_t>((value >> 8) & 0xff));
+    out.push_back(static_cast<uint8_t>(value & 0xff));
+}
+
+static uint32_t png_crc32(const uint8_t* data, size_t size) {
+    static const auto table = []() {
+        std::vector<uint32_t> values(256);
+        for (uint32_t n = 0; n < 256; n++) {
+            uint32_t crc = n;
+            for (int bit = 0; bit < 8; bit++) {
+                crc = (crc & 1u) ? (0xedb88320u ^ (crc >> 1)) : (crc >> 1);
+            }
+            values[n] = crc;
+        }
+        return values;
+    }();
+
+    uint32_t crc = 0xffffffffu;
+    for (size_t i = 0; i < size; i++) {
+        crc = table[(crc ^ data[i]) & 0xffu] ^ (crc >> 8);
+    }
+    return crc ^ 0xffffffffu;
+}
+
+static bool png_source_image_ok(const PngSourceImage& image) {
+    if (image.data == nullptr || image.width <= 0 || image.height <= 0) {
+        return false;
+    }
+    if (image.channels < 1 || image.channels > 4) {
+        return false;
+    }
+    const size_t pixels = static_cast<size_t>(image.width) * static_cast<size_t>(image.height);
+    return pixels <= (64u * 1024u * 1024u) / static_cast<size_t>(image.channels);
+}
+
+bool embed_png_source_images(const std::string& path, const std::vector<PngSourceImage>& images) {
+    if (path.empty() || images.empty()) {
+        return false;
+    }
+    if (encoded_image_format_from_path(path) != EncodedImageFormat::PNG) {
+        return false;
+    }
+
+    std::vector<uint8_t> file;
+    if (!read_binary_file_bytes(path.c_str(), file) || file.size() < 8) {
+        return false;
+    }
+    const uint8_t signature[8] = {137, 80, 78, 71, 13, 10, 26, 10};
+    if (std::memcmp(file.data(), signature, 8) != 0) {
+        return false;
+    }
+
+    size_t iend = 0;
+    bool found_iend = false;
+    size_t offset = 8;
+    while (offset + 12 <= file.size()) {
+        const uint32_t length = png_read_be32(file.data() + offset);
+        if (offset + 12ull + length > file.size()) {
+            return false;
+        }
+        if (std::memcmp(file.data() + offset + 4, "IEND", 4) == 0) {
+            iend = offset;
+            found_iend = true;
+            break;
+        }
+        offset += 12ull + length;
+    }
+    if (!found_iend) {
+        return false;
+    }
+
+    std::vector<uint8_t> payload;
+    payload.push_back(1);
+    payload.push_back(0);
+    payload.push_back(0);
+    uint16_t stored = 0;
+    size_t stored_bytes = 0;
+    constexpr size_t kMaxImageBytes = 8u * 1024u * 1024u;
+    constexpr size_t kMaxTotalBytes = 24u * 1024u * 1024u;
+    for (const PngSourceImage& image : images) {
+        if (stored >= 6 || !png_source_image_ok(image)) {
+            continue;
+        }
+        const std::vector<uint8_t> png = encode_image_to_vector(EncodedImageFormat::PNG,
+                                                                image.data,
+                                                                image.width,
+                                                                image.height,
+                                                                image.channels);
+        if (png.empty() || png.size() > kMaxImageBytes || stored_bytes + png.size() > kMaxTotalBytes) {
+            continue;
+        }
+        payload.push_back(static_cast<uint8_t>(image.role));
+        payload.push_back(image.index);
+        png_write_be32(payload, static_cast<uint32_t>(png.size()));
+        payload.insert(payload.end(), png.begin(), png.end());
+        stored_bytes += png.size();
+        stored++;
+    }
+    if (stored == 0) {
+        return false;
+    }
+    payload[1] = static_cast<uint8_t>((stored >> 8) & 0xff);
+    payload[2] = static_cast<uint8_t>(stored & 0xff);
+
+    std::vector<uint8_t> chunk;
+    png_write_be32(chunk, static_cast<uint32_t>(payload.size()));
+    chunk.push_back('s');
+    chunk.push_back('d');
+    chunk.push_back('I');
+    chunk.push_back('s');
+    chunk.insert(chunk.end(), payload.begin(), payload.end());
+    const uint32_t crc = png_crc32(chunk.data() + 4, chunk.size() - 4);
+    png_write_be32(chunk, crc);
+
+    file.insert(file.begin() + static_cast<std::ptrdiff_t>(iend), chunk.begin(), chunk.end());
+    const fs::path temp = fs::path(path).concat(".src.tmp");
+    if (!write_binary_file_bytes(temp.u8string(), file)) {
+        std::error_code remove_ec;
+        fs::remove(temp, remove_ec);
+        return false;
+    }
+    std::error_code ec;
+    fs::rename(temp, fs::path(path), ec);
+    if (ec) {
+        std::error_code remove_ec;
+        fs::remove(temp, remove_ec);
+        return false;
+    }
+    LOG_INFO("stored %u source image(s) in '%s'", static_cast<unsigned>(stored), path.c_str());
+    return true;
+}
+
 uint8_t* load_image_from_file(const char* image_path,
                               int& width,
                               int& height,

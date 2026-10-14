@@ -501,6 +501,9 @@ bool save_results(const SDCliParams& cli_params,
                                           ? get_image_params(ctx_params, gen_params, metadata_seed, cli_params.mode)
                                           : "";
         const bool ok               = write_image_to_file(path.string(), img.data, img.width, img.height, img.channel, params, cli_params.compression_quality);
+        if (ok) {
+            embed_output_source_images(path.string(), gen_params);
+        }
         LOG_INFO("save result image %d to '%s' (%s)", idx, path.string().c_str(), ok ? "success" : "failure");
         return ok;
     };
