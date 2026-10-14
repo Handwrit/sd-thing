@@ -90,11 +90,36 @@ namespace sd {
         if (manager == nullptr) {
             return segment_params_[segment_index].empty();
         }
-        std::vector<ggml_tensor*> protected_params = segment_params_[segment_index];
-        protected_params.insert(protected_params.end(), queued_params_.begin(), queued_params_.end());
+        // The next sampling step starts at these early segments. Once a later
+        // segment is already resident, reclaim that one instead; dropping the
+        // early set makes every following step reload it. A cold pass has no
+        // later segment to drop, and still uses the normal eviction.
+        std::vector<ggml_tensor*> next_step_params = queued_params_;
+        for (size_t index = 0; index <= segment_index; ++index) {
+            const auto& segment = segment_params_[index];
+            next_step_params.insert(next_step_params.end(), segment.begin(), segment.end());
+        }
+        bool later_segment_resident = false;
+        for (size_t index = segment_index + 1; index < segment_params_.size(); ++index) {
+            if (segment_params_[index].empty()) {
+                continue;
+            }
+            const WeightResidencyInfo residency = manager->inspect_compute_backend_params(segment_params_[index]);
+            if (residency.missing_bytes == 0) {
+                later_segment_resident = true;
+                break;
+            }
+        }
+        std::vector<ggml_tensor*> current_params = segment_params_[segment_index];
+        current_params.insert(current_params.end(), queued_params_.begin(), queued_params_.end());
         for (const auto& request : requests) {
+            if (later_segment_resident &&
+                manager->ensure_compute_backend_capacity(request, segment_params_[segment_index],
+                                                         preferred_eviction_order(), next_step_params)) {
+                continue;
+            }
             if (!manager->ensure_compute_backend_capacity(request, segment_params_[segment_index],
-                                                          preferred_eviction_order(), protected_params)) {
+                                                          preferred_eviction_order(), current_params)) {
                 return false;
             }
         }

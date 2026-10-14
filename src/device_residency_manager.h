@@ -27,6 +27,9 @@ struct DeviceMemoryRequest {
     size_t pending_allocation_bytes = 0;
     size_t runtime_resident_bytes   = 0;
     size_t max_backend_bytes        = 0;
+    // Scratch that graph measurement does not see. A required load must be
+    // able to set this to zero instead of evicting weights to create it.
+    size_t device_safety_bytes = 512ULL * 1024ULL * 1024ULL;
 
     // Runtime buffers only; the manager accounts for weights separately.
     size_t runtime_peak_bytes() const {
