@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "model/diffusion/shape_mask.h"
 #include "stable-diffusion.h"
 
 class StableDiffusionGGML;
@@ -24,6 +25,7 @@ namespace sd::pipeline {
         std::string prompt;
         std::string negative_prompt;
         std::string nag_prompt;
+        std::vector<ShapeMaskInput> shape_masks;
         int width                                = -1;
         int height                               = -1;
         int clip_skip                            = -1;

@@ -467,6 +467,114 @@
       gap: 0.75rem;
     }
     .settings-dialog .row { justify-content: flex-end; }
+    .is-ice,
+    .is-ice:read-only,
+    .is-ice:disabled {
+      background: #d7eef8 !important;
+      color: #16384a !important;
+      border-color: #7eb6d6 !important;
+    }
+    #useShapesBtn.is-on {
+      background: #d7eef8;
+      color: #16384a;
+      border-color: #7eb6d6;
+    }
+    .shape-overlay {
+      position: fixed;
+      inset: 1rem;
+      z-index: 28;
+      display: flex;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .shape-overlay[hidden],
+    #shapeActions[hidden],
+    #shapeFoot[hidden],
+    #shapeDropAsk[hidden] { display: none !important; }
+    .shape-side {
+      width: 220px;
+      min-width: 180px;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .shape-side h2 {
+      margin: 0;
+      padding: 0.7rem 0.8rem 0.2rem;
+      font-size: 0.95rem;
+    }
+    .shape-meta {
+      padding: 0 0.8rem 0.6rem;
+      color: var(--muted);
+      font-size: 0.75rem;
+    }
+    .shape-words {
+      flex: 1;
+      min-height: 0;
+      overflow: auto;
+      padding: 0 0.4rem 0.6rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+    .shape-word {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      text-align: left;
+      background: transparent;
+      color: var(--text);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      padding: 0.28rem 0.4rem;
+    }
+    .shape-word.is-on { border-color: var(--border); background: var(--panel); }
+    .shape-swatch {
+      width: 0.7rem;
+      height: 0.7rem;
+      border-radius: 2px;
+      flex: 0 0 auto;
+    }
+    .shape-word span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .shape-main {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .shape-tools, .shape-foot {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      align-items: center;
+      padding: 0.55rem 0.7rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .shape-foot { border-bottom: 0; border-top: 1px solid var(--border); justify-content: flex-end; }
+    .shape-tools button, .shape-foot button { width: auto; }
+    .shape-tools label {
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: none;
+    }
+    .shape-tools input[type="range"] { width: 7rem; }
+    .shape-board {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #2a2e3a;
+      overflow: auto;
+    }
+    #shapeCanvas { cursor: crosshair; image-rendering: pixelated; touch-action: none; }
+    .shape-tool.is-on { background: var(--accent); color: white; border-color: var(--accent); }
     .settings-dialog .btn-primary,
     .settings-dialog .btn-secondary {
       flex: 0 0 auto;
@@ -628,6 +736,9 @@
     <div class="field-group">
       <label>Prompt</label>
       <textarea id="prompt" placeholder="A cozy cabin in the misty pine forest...">a cinematic shot of an ancient library, dust motes in sunbeams, hyperrealistic, octane render</textarea>
+      <div class="row prompt-actions" id="shapeActions" hidden>
+        <button class="btn-secondary" type="button" id="useShapesBtn">Use shapes</button>
+      </div>
       <div class="row prompt-actions">
         <button class="btn-secondary" type="button" id="loadPromptBtn">Load prompt</button>
         <button class="btn-secondary" type="button" id="loadPromptShownBtn">From shown</button>
@@ -899,6 +1010,35 @@
     </div>
   </div>
 
+  <div id="shapeOverlay" class="shape-overlay" hidden>
+    <div class="shape-side">
+      <h2>Shapes</h2>
+      <div class="shape-meta" id="shapeMeta"></div>
+      <div class="shape-words" id="shapeWords"></div>
+    </div>
+    <div class="shape-main">
+      <div class="shape-tools">
+        <button class="btn-secondary shape-tool" type="button" data-shape-tool="pencil">Pencil</button>
+        <button class="btn-secondary shape-tool" type="button" data-shape-tool="hard">Hard</button>
+        <button class="btn-secondary shape-tool" type="button" data-shape-tool="soft">Soft</button>
+        <label>Size <input type="range" id="shapeSize" min="1" max="48" step="1" value="8" /></label>
+        <label>Opacity <input type="range" id="shapeOpacity" min="0.05" max="1" step="0.05" value="1" /></label>
+        <button class="btn-secondary" type="button" id="shapeModeBtn">Draw</button>
+        <button class="btn-secondary" type="button" id="shapeViewBtn">Blended</button>
+      </div>
+      <div class="shape-board" id="shapeBoard"><canvas id="shapeCanvas"></canvas></div>
+      <div class="shape-foot" id="shapeFoot">
+        <button class="btn-secondary" type="button" id="shapeDropBtn">Drop shapes</button>
+        <button class="btn-primary" type="button" id="shapeSaveBtn">Save shapes</button>
+      </div>
+      <div class="shape-foot" id="shapeDropAsk" hidden>
+        <span>Drop the shapes?</span>
+        <button class="btn-secondary" type="button" id="shapeDropNo">No</button>
+        <button class="btn-primary" type="button" id="shapeDropYes">Yes</button>
+      </div>
+    </div>
+  </div>
+
   <div id="saveSettingsOverlay" class="settings-overlay" hidden>
     <div class="settings-dialog" role="dialog" aria-label="Save settings">
       <label for="saveSettingsNote">Save settings</label>
@@ -1055,6 +1195,7 @@
         localStorage.setItem(SESSION_KEY, JSON.stringify({
           form: readFormState(),
           designer: savedDesigner,
+          shapes: shapeSession(),
         }));
       } catch (e) { /* quota / private mode */ }
     }
@@ -1068,6 +1209,7 @@
       if (!data || typeof data !== 'object') return;
       if (data.designer && typeof data.designer === 'object') savedDesigner = data.designer;
       applyFormState(data.form);
+      restoreShapeSession(data.shapes);
     }
 
     function openSaveSettings() {
@@ -1517,7 +1659,7 @@
     }
 
     function applySizeChoice(val) {
-      if (!val) return;
+      if (!val || shapeState) return;
       const [w, h] = val.split('x').map(Number);
       if (!w || !h) return;
       document.getElementById('width').value = w;
@@ -2012,7 +2154,7 @@
         strength.value = '0.75';
         strengthNum.value = '0.75';
         setSteppedEnabled('i2iStrengthNum', false);
-        if (h3AppliedFor !== connectedModel) {
+        if (h3AppliedFor !== connectedModel && !shapeState) {
           document.getElementById('width').value = '864';
           document.getElementById('height').value = '480';
           document.getElementById('cfg').value = '1';
@@ -2030,6 +2172,7 @@
       }
       rebuildSizeCalc();
       syncRefChrome();
+      syncShapeButton();
     }
 
     function defaultScheduleKind() {
@@ -2202,7 +2345,7 @@
       const mode = i2iDim();
       let w = Number(document.getElementById('width').value) || 512;
       let h = Number(document.getElementById('height').value) || 512;
-      if (mode === 'source') {
+      if (mode === 'source' && !shapeState) {
         w = round64(img.naturalWidth);
         h = round64(img.naturalHeight);
         document.getElementById('width').value = String(w);
@@ -2427,7 +2570,7 @@
     }
 
     function applyParsedPrompts(parsed, replaceEmpty) {
-      document.getElementById('prompt').value = parsed.positive;
+      if (!shapeState) document.getElementById('prompt').value = parsed.positive;
       if (typeof parsed.negative === 'string' && (replaceEmpty || parsed.negative.trim() !== '')) {
         document.getElementById('negPrompt').value = parsed.negative;
       }
@@ -2888,6 +3031,8 @@
         i2i,
         send_images: false
       };
+      const shapeMasks = shapePayload();
+      if (shapeMasks) payload.shape_masks = shapeMasks;
       if (designerEnabled()) {
         payload.scheduler = document.getElementById('designerFormula').value;
         const extra = designerExtraArgs();
@@ -3412,8 +3557,10 @@
               return;
             }
             payload.init_images = [await canvasToPngDataUrl(canvas)];
-            payload.width = canvas.width;
-            payload.height = canvas.height;
+            if (!shapeState) {
+              payload.width = canvas.width;
+              payload.height = canvas.height;
+            }
           } else {
             payload.i2i = false;
           }
@@ -3430,8 +3577,10 @@
           setStatusText('Preparing i2i…', false);
           await new Promise(resolve => setTimeout(resolve, 0));
           payload.init_images = [await canvasToPngDataUrl(canvas)];
-          payload.width = canvas.width;
-          payload.height = canvas.height;
+          if (!shapeState) {
+            payload.width = canvas.width;
+            payload.height = canvas.height;
+          }
         }
         const res = await fetch(apiBase + '/sdapi/v1/queue', {
           method: 'POST',
@@ -3562,6 +3711,479 @@
       sizeRotated = !sizeRotated;
       rebuildSizeCalc();
     });
+    let shapeState = null;
+    let shapePainting = false;
+    let shapeLast = null;
+
+    function utf8Offset(text, index) {
+      return new TextEncoder().encode(text.slice(0, index)).length;
+    }
+
+    function randomShapeColor() {
+      const hue = Math.floor(Math.random() * 360);
+      const sat = 62;
+      const light = 52;
+      const c = (1 - Math.abs(2 * light / 100 - 1)) * sat / 100;
+      const x = c * (1 - Math.abs((hue / 60) % 2 - 1));
+      const m = light / 100 - c / 2;
+      let r = 0;
+      let g = 0;
+      let b = 0;
+      if (hue < 60) { r = c; g = x; }
+      else if (hue < 120) { r = x; g = c; }
+      else if (hue < 180) { g = c; b = x; }
+      else if (hue < 240) { g = x; b = c; }
+      else if (hue < 300) { r = x; b = c; }
+      else { r = c; b = x; }
+      const hex = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+      return '#' + hex(r) + hex(g) + hex(b);
+    }
+
+    function splitShapeWords(text) {
+      const words = [];
+      const re = /\S+/gu;
+      let match;
+      while ((match = re.exec(text))) {
+        words.push({
+          start: utf8Offset(text, match.index),
+          end: utf8Offset(text, match.index + match[0].length),
+          text: match[0],
+          color: randomShapeColor(),
+          cells: null,
+        });
+      }
+      return words;
+    }
+
+    function bytesToB64(bytes) {
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 4096) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 4096));
+      }
+      return btoa(bin);
+    }
+
+    function b64ToBytes(text, length) {
+      const out = new Uint8Array(length);
+      if (!text) return out;
+      const bin = atob(text);
+      for (let i = 0; i < length && i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+
+    function shapeCells(word) {
+      const count = shapeState.gridW * shapeState.gridH;
+      if (!word.cells || word.cells.length !== count) word.cells = new Uint8Array(count);
+      return word.cells;
+    }
+
+    function wordHasPaint(word) {
+      return !!(word.cells && word.cells.some(value => value > 0));
+    }
+
+    function shapeSession() {
+      if (!shapeState) return null;
+      return {
+        prompt: shapeState.prompt,
+        width: shapeState.width,
+        height: shapeState.height,
+        gridW: shapeState.gridW,
+        gridH: shapeState.gridH,
+        selected: shapeState.selected,
+        view: shapeState.view,
+        tool: shapeState.tool,
+        size: shapeState.size,
+        opacity: shapeState.opacity,
+        erase: shapeState.erase,
+        words: shapeState.words.map(word => ({
+          start: word.start,
+          end: word.end,
+          text: word.text,
+          color: word.color,
+          grid: wordHasPaint(word) ? bytesToB64(word.cells) : '',
+        })),
+      };
+    }
+
+    function restoreShapeSession(saved) {
+      if (!saved || !Array.isArray(saved.words) || !saved.words.length) return;
+      const count = Number(saved.gridW) * Number(saved.gridH);
+      if (!count) return;
+      shapeState = {
+        prompt: String(saved.prompt || ''),
+        width: Number(saved.width),
+        height: Number(saved.height),
+        gridW: Number(saved.gridW),
+        gridH: Number(saved.gridH),
+        selected: Number(saved.selected) || 0,
+        view: saved.view === 'solo' ? 'solo' : 'blended',
+        tool: saved.tool === 'pencil' || saved.tool === 'soft' ? saved.tool : 'hard',
+        size: Number(saved.size) || 8,
+        opacity: Number(saved.opacity) || 1,
+        erase: !!saved.erase,
+        words: saved.words.map(word => ({
+          start: Number(word.start) || 0,
+          end: Number(word.end) || 0,
+          text: String(word.text || ''),
+          color: typeof word.color === 'string' ? word.color : randomShapeColor(),
+          cells: word.grid ? b64ToBytes(word.grid, count) : null,
+        })),
+      };
+      if (shapeState.selected < 0 || shapeState.selected >= shapeState.words.length) shapeState.selected = 0;
+      document.getElementById('prompt').value = shapeState.prompt;
+      document.getElementById('width').value = String(shapeState.width);
+      document.getElementById('height').value = String(shapeState.height);
+      applyShapeLock();
+    }
+
+    function applyShapeLock() {
+      const on = !!shapeState;
+      ['prompt', 'width', 'height'].forEach(id => {
+        const el = document.getElementById(id);
+        el.readOnly = on;
+        el.classList.toggle('is-ice', on);
+      });
+      syncShapeButton();
+    }
+
+    function syncShapeButton() {
+      const row = document.getElementById('shapeActions');
+      const btn = document.getElementById('useShapesBtn');
+      if (!row || !btn) return;
+      row.hidden = !(isFlux2Dev() || shapeState);
+      btn.classList.toggle('is-on', !!shapeState);
+    }
+
+    function shapePayload() {
+      if (!shapeState || !isFlux2Dev()) return null;
+      const masks = [];
+      shapeState.words.forEach(word => {
+        if (!wordHasPaint(word)) return;
+        masks.push({
+          start: word.start,
+          end: word.end,
+          w: shapeState.gridW,
+          h: shapeState.gridH,
+          grid: bytesToB64(word.cells),
+        });
+      });
+      return masks.length ? masks : null;
+    }
+
+    function renderShapeList() {
+      const host = document.getElementById('shapeWords');
+      const meta = document.getElementById('shapeMeta');
+      host.replaceChildren();
+      meta.textContent = shapeState.gridW + ' × ' + shapeState.gridH + ' cells';
+      shapeState.words.forEach((word, index) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'shape-word' + (index === shapeState.selected ? ' is-on' : '');
+        const swatch = document.createElement('i');
+        swatch.className = 'shape-swatch';
+        swatch.style.background = word.color;
+        const label = document.createElement('span');
+        label.textContent = word.text;
+        button.append(swatch, label);
+        button.onclick = () => {
+          shapeState.selected = index;
+          renderShapeList();
+          redrawShapeCanvas();
+        };
+        host.appendChild(button);
+      });
+    }
+
+    function syncShapeControls() {
+      document.querySelectorAll('[data-shape-tool]').forEach(button => {
+        button.classList.toggle('is-on', button.dataset.shapeTool === shapeState.tool);
+      });
+      const size = document.getElementById('shapeSize');
+      const opacity = document.getElementById('shapeOpacity');
+      size.value = String(shapeState.size);
+      size.disabled = shapeState.tool === 'pencil';
+      opacity.value = String(shapeState.opacity);
+      document.getElementById('shapeModeBtn').textContent = shapeState.erase ? 'Erase' : 'Draw';
+      document.getElementById('shapeViewBtn').textContent = shapeState.view === 'solo' ? 'Solo' : 'Blended';
+    }
+
+    function shapeRgb(hex) {
+      const value = Number.parseInt(String(hex).slice(1), 16);
+      if (!Number.isFinite(value)) return [180, 180, 180];
+      return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+    }
+
+    function redrawShapeCanvas() {
+      const canvas = document.getElementById('shapeCanvas');
+      const ctx = canvas.getContext('2d');
+      const cell = shapeState.cellPx || 8;
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#8d8d8d';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const paintCell = (index, color, alpha) => {
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = color;
+        ctx.fillRect((index % shapeState.gridW) * cell, Math.floor(index / shapeState.gridW) * cell, cell, cell);
+      };
+      if (shapeState.view === 'solo') {
+        const word = shapeState.words[shapeState.selected];
+        if (word && word.cells) {
+          ctx.fillStyle = word.color;
+          for (let i = 0; i < word.cells.length; i++) {
+            if (word.cells[i]) paintCell(i, word.color, word.cells[i] / 255);
+          }
+        }
+        ctx.globalAlpha = 1;
+      } else {
+        const colors = shapeState.words.map(word => shapeRgb(word.color));
+        const grey = [141, 141, 141];
+        const count = shapeState.gridW * shapeState.gridH;
+        for (let i = 0; i < count; i++) {
+          let rgb = null;
+          for (let w = 0; w < shapeState.words.length; w++) {
+            const cells = shapeState.words[w].cells;
+            const value = cells ? cells[i] : 0;
+            if (!value) continue;
+            const alpha = value / 255;
+            const color = colors[w];
+            const next = [0, 0, 0];
+            for (let c = 0; c < 3; c++) {
+              if (!rgb) {
+                next[c] = grey[c] * (1 - alpha) + color[c] * alpha;
+              } else {
+                const screened = 255 - ((255 - rgb[c]) * (255 - color[c])) / 255;
+                next[c] = rgb[c] * (1 - alpha) + screened * alpha;
+              }
+            }
+            rgb = next;
+          }
+          if (!rgb) continue;
+          paintCell(i, 'rgb(' + Math.round(rgb[0]) + ',' + Math.round(rgb[1]) + ',' + Math.round(rgb[2]) + ')', 1);
+        }
+        ctx.globalAlpha = 1;
+      }
+      if (cell >= 6) {
+        ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = 0; x <= shapeState.gridW; x++) {
+          ctx.moveTo(x * cell + 0.5, 0);
+          ctx.lineTo(x * cell + 0.5, canvas.height);
+        }
+        for (let y = 0; y <= shapeState.gridH; y++) {
+          ctx.moveTo(0, y * cell + 0.5);
+          ctx.lineTo(canvas.width, y * cell + 0.5);
+        }
+        ctx.stroke();
+      }
+    }
+
+    function layoutShapeBoard() {
+      const board = document.getElementById('shapeBoard');
+      const canvas = document.getElementById('shapeCanvas');
+      const cell = Math.max(4, Math.floor(Math.min(
+        (board.clientWidth - 16) / shapeState.gridW,
+        (board.clientHeight - 16) / shapeState.gridH
+      )));
+      shapeState.cellPx = cell;
+      canvas.width = shapeState.gridW * cell;
+      canvas.height = shapeState.gridH * cell;
+      redrawShapeCanvas();
+    }
+
+    function shapePoint(ev) {
+      const canvas = document.getElementById('shapeCanvas');
+      const rect = canvas.getBoundingClientRect();
+      const x = (ev.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (ev.clientY - rect.top) * (canvas.height / rect.height);
+      return { x: x / shapeState.cellPx, y: y / shapeState.cellPx };
+    }
+
+    function stampShape(px, py) {
+      const word = shapeState.words[shapeState.selected];
+      if (!word) return;
+      const cells = shapeCells(word);
+      const opacity = Number(shapeState.opacity) || 1;
+      const target = shapeState.erase ? 0 : 1;
+      const paint = (gx, gy, stamp) => {
+        if (gx < 0 || gy < 0 || gx >= shapeState.gridW || gy >= shapeState.gridH || stamp <= 0) return;
+        const index = gy * shapeState.gridW + gx;
+        const current = cells[index] / 255;
+        cells[index] = Math.max(0, Math.min(255, Math.round((current + (target - current) * stamp) * 255)));
+      };
+      if (shapeState.tool === 'pencil') {
+        paint(Math.floor(px), Math.floor(py), opacity);
+        return;
+      }
+      const radius = Math.max(0.5, Number(shapeState.size) / 2);
+      const x0 = Math.max(0, Math.floor(px - radius));
+      const x1 = Math.min(shapeState.gridW - 1, Math.ceil(px + radius));
+      const y0 = Math.max(0, Math.floor(py - radius));
+      const y1 = Math.min(shapeState.gridH - 1, Math.ceil(py + radius));
+      for (let gy = y0; gy <= y1; gy++) {
+        for (let gx = x0; gx <= x1; gx++) {
+          const dist = Math.hypot(gx + 0.5 - px, gy + 0.5 - py);
+          if (dist > radius) continue;
+          const falloff = shapeState.tool === 'soft' ? 1 - dist / radius : 1;
+          paint(gx, gy, opacity * falloff);
+        }
+      }
+    }
+
+    function strokeShape(to) {
+      if (!shapeLast) {
+        stampShape(to.x, to.y);
+        shapeLast = to;
+        return;
+      }
+      const dist = Math.hypot(to.x - shapeLast.x, to.y - shapeLast.y);
+      const steps = Math.max(1, Math.ceil(dist * 2));
+      for (let i = 1; i <= steps; i++) {
+        const t = i / steps;
+        stampShape(shapeLast.x + (to.x - shapeLast.x) * t, shapeLast.y + (to.y - shapeLast.y) * t);
+      }
+      shapeLast = to;
+    }
+
+    function openShapeEditor() {
+      if (!isFlux2Dev() && !shapeState) return;
+      if (!shapeState) {
+        const width = Number(document.getElementById('width').value);
+        const height = Number(document.getElementById('height').value);
+        if (!width || !height || width % 16 || height % 16) {
+          setStatusText('Shapes need a width and height divisible by 16', false);
+          return;
+        }
+        const prompt = document.getElementById('prompt').value;
+        const words = splitShapeWords(prompt);
+        if (!words.length) {
+          setStatusText('Prompt has no words to paint', false);
+          return;
+        }
+        shapeState = {
+          prompt: prompt,
+          width: width,
+          height: height,
+          gridW: width / 16,
+          gridH: height / 16,
+          words: words,
+          selected: 0,
+          view: 'blended',
+          tool: 'hard',
+          size: 8,
+          opacity: 1,
+          erase: false,
+        };
+        applyShapeLock();
+        persistSession();
+      }
+      document.getElementById('shapeDropAsk').hidden = true;
+      document.getElementById('shapeFoot').hidden = false;
+      syncShapeControls();
+      renderShapeList();
+      document.getElementById('shapeOverlay').hidden = false;
+      requestAnimationFrame(layoutShapeBoard);
+    }
+
+    function saveShapes() {
+      document.getElementById('shapeOverlay').hidden = true;
+      persistSession();
+    }
+
+    function askDropShapes() {
+      document.getElementById('shapeFoot').hidden = true;
+      document.getElementById('shapeDropAsk').hidden = false;
+    }
+
+    function cancelDropShapes() {
+      document.getElementById('shapeDropAsk').hidden = true;
+      document.getElementById('shapeFoot').hidden = false;
+    }
+
+    function dropShapes() {
+      shapeState = null;
+      shapePainting = false;
+      document.getElementById('shapeOverlay').hidden = true;
+      cancelDropShapes();
+      applyShapeLock();
+      persistSession();
+    }
+
+    function bindShapeEditor() {
+      ['prompt', 'width', 'height'].forEach(id => {
+        const el = document.getElementById(id);
+        el.addEventListener('beforeinput', (ev) => {
+          if (shapeState) ev.preventDefault();
+        });
+        el.addEventListener('input', () => {
+          if (!shapeState) return;
+          const locked = id === 'prompt' ? shapeState.prompt : String(shapeState[id]);
+          if (el.value !== locked) el.value = locked;
+        });
+      });
+      document.getElementById('useShapesBtn').addEventListener('click', openShapeEditor);
+      document.getElementById('shapeSaveBtn').addEventListener('click', saveShapes);
+      document.getElementById('shapeDropBtn').addEventListener('click', askDropShapes);
+      document.getElementById('shapeDropNo').addEventListener('click', cancelDropShapes);
+      document.getElementById('shapeDropYes').addEventListener('click', dropShapes);
+      document.querySelectorAll('[data-shape-tool]').forEach(button => {
+        button.addEventListener('click', () => {
+          if (!shapeState) return;
+          shapeState.tool = button.dataset.shapeTool;
+          syncShapeControls();
+        });
+      });
+      document.getElementById('shapeSize').addEventListener('input', (ev) => {
+        if (shapeState) shapeState.size = Number(ev.target.value);
+      });
+      document.getElementById('shapeOpacity').addEventListener('input', (ev) => {
+        if (shapeState) shapeState.opacity = Number(ev.target.value);
+      });
+      document.getElementById('shapeModeBtn').addEventListener('click', () => {
+        if (!shapeState) return;
+        shapeState.erase = !shapeState.erase;
+        syncShapeControls();
+      });
+      document.getElementById('shapeViewBtn').addEventListener('click', () => {
+        if (!shapeState) return;
+        shapeState.view = shapeState.view === 'solo' ? 'blended' : 'solo';
+        syncShapeControls();
+        redrawShapeCanvas();
+      });
+      const canvas = document.getElementById('shapeCanvas');
+      canvas.addEventListener('pointerdown', (ev) => {
+        if (!shapeState) return;
+        shapePainting = true;
+        canvas.setPointerCapture(ev.pointerId);
+        shapeLast = null;
+        strokeShape(shapePoint(ev));
+        redrawShapeCanvas();
+      });
+      canvas.addEventListener('pointermove', (ev) => {
+        if (!shapePainting) return;
+        strokeShape(shapePoint(ev));
+        redrawShapeCanvas();
+      });
+      const endStroke = () => {
+        if (!shapePainting) return;
+        shapePainting = false;
+        shapeLast = null;
+        persistSession();
+      };
+      canvas.addEventListener('pointerup', endStroke);
+      canvas.addEventListener('pointercancel', endStroke);
+      canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
+      document.addEventListener('keydown', (ev) => {
+        const overlay = document.getElementById('shapeOverlay');
+        if (!overlay || overlay.hidden || ev.key !== 'Escape') return;
+        ev.preventDefault();
+        if (!document.getElementById('shapeDropAsk').hidden) cancelDropShapes();
+        else saveShapes();
+      });
+      syncShapeButton();
+    }
+
+    bindShapeEditor();
     restoreSession();
     rebuildSizeCalc();
     syncI2i();

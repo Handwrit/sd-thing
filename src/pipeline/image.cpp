@@ -573,6 +573,7 @@ namespace sd::pipeline {
         }
 
         condition_params.ref_image_params = ref_image_params;
+        condition_params.shape_masks      = request->shape_masks.empty() ? nullptr : &request->shape_masks;
 
         sd->prepare_generation_extensions(request->pm_params,
                                           request->pulid_params,
@@ -587,6 +588,7 @@ namespace sd::pipeline {
             LOG_ERROR("failed to encode prompt");
             return std::nullopt;
         }
+        condition_params.shape_masks = nullptr;
         if (cond.c_concat.empty() && ref_image_params.pass_to_dit) {
             cond.c_concat = latents->concat_latent;  // TODO: optimize
         }

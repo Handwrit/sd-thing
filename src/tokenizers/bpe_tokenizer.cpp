@@ -250,3 +250,83 @@ bool BPETokenizer::encode(const std::string& text, std::vector<int>& result, on_
 std::string BPETokenizer::decode_token(int token_id) const {
     return utf32_to_utf8(decoder.at(token_id));
 }
+
+bool BPETokenizer::encode_token_spans(const std::string& text,
+                                      std::vector<int>& tokens,
+                                      std::vector<std::pair<size_t, size_t>>& byte_spans,
+                                      std::string* error) {
+    tokens.clear();
+    byte_spans.clear();
+    if (error) {
+        error->clear();
+    }
+    const std::string normalized = normalize_before_split ? normalize(text) : text;
+    if (normalized.size() != text.size()) {
+        if (error) {
+            *error = "tokenizer normalization changed the prompt length";
+        }
+        return false;
+    }
+
+    auto append_piece = [&](const std::string& piece, size_t begin, size_t end) -> bool {
+        std::vector<int> piece_tokens;
+        if (!encode(piece, piece_tokens, nullptr, error)) {
+            return false;
+        }
+        for (int id : piece_tokens) {
+            tokens.push_back(id);
+            byte_spans.emplace_back(begin, end);
+        }
+        return true;
+    };
+
+    size_t pos            = 0;
+    const size_t text_len = normalized.size();
+    while (pos < text_len) {
+        size_t next_pos = text_len;
+        std::string matched;
+        for (const auto& special : special_tokens) {
+            if (special.empty()) {
+                continue;
+            }
+            const size_t found = normalized.find(special, pos);
+            if (found != std::string::npos &&
+                (found < next_pos || (found == next_pos && special.size() > matched.size()))) {
+                next_pos = found;
+                matched  = special;
+            }
+        }
+
+        if (next_pos > pos) {
+            const std::string piece = normalized.substr(pos, next_pos - pos);
+            if (!split_regex_) {
+                if (!append_piece(piece, pos, next_pos)) {
+                    return false;
+                }
+            } else {
+                std::vector<sd::Regex::Match> matches;
+                if (!split_regex_->find_matches(piece, matches, error)) {
+                    return false;
+                }
+                for (const auto& match : matches) {
+                    if (match.first == match.second) {
+                        continue;
+                    }
+                    const std::string sub = piece.substr(match.first, match.second - match.first);
+                    if (!append_piece(sub, pos + match.first, pos + match.second)) {
+                        return false;
+                    }
+                }
+            }
+        }
+
+        if (matched.empty()) {
+            break;
+        }
+        if (!append_piece(matched, next_pos, next_pos + matched.size())) {
+            return false;
+        }
+        pos = next_pos + matched.size();
+    }
+    return true;
+}

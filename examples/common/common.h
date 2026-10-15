@@ -196,6 +196,7 @@ struct SDGenerationParams {
     std::string prompt;
     std::string negative_prompt;
     std::string nag_prompt;
+    std::string shape_masks_json;
     std::string ad_model_path;
     std::string ad_prompt;
     std::string ad_negative_prompt;

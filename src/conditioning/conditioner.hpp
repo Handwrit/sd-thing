@@ -13,6 +13,7 @@
 #include "core/tensor_ggml.hpp"
 #include "core/util.h"
 #include "model/diffusion/model.hpp"
+#include "tokenizers/bpe_tokenizer.h"
 #include "model/te/clip.hpp"
 #include "model/te/llm.hpp"
 #include "model/te/t5.hpp"
@@ -36,6 +37,7 @@ struct SDCondition {
     std::vector<MiniMaxH3ReferenceBlock> c_reference_blocks;
 
     std::vector<sd::Tensor<float>> extra_c_crossattns;
+    std::vector<ShapeTokenMask> shape_token_masks;
 
     SDCondition() = default;
 
@@ -136,6 +138,7 @@ struct ConditionerParams {
     const std::vector<sd::Tensor<float>>* ref_images                    = nullptr;  // for qwen image edit
     const std::vector<MiniMaxH3PresentationItem>* minimax_h3_references = nullptr;
     RefImageParams ref_image_params;
+    const std::vector<ShapeMaskInput>* shape_masks = nullptr;
 };
 
 struct Conditioner {
@@ -2292,6 +2295,84 @@ struct LLMEmbedder : public Conditioner {
         }
     }
 
+    void attach_flux2_shape_masks(SDCondition& result,
+                                  const std::string& prompt,
+                                  const std::pair<int, int>& prompt_attn_range,
+                                  int prompt_template_encode_start_idx,
+                                  const std::vector<ShapeMaskInput>* shape_masks) {
+        if (shape_masks == nullptr || shape_masks->empty() || version != VERSION_FLUX2) {
+            return;
+        }
+        if (prompt_attn_range.first < 0 || prompt_attn_range.second < prompt_attn_range.first ||
+            prompt_attn_range.second > static_cast<int>(prompt.size())) {
+            LOG_WARN("flux shape masks ignored: prompt span is outside the wrapped prompt");
+            return;
+        }
+        const std::string prefix = prompt.substr(0, static_cast<size_t>(prompt_attn_range.first));
+        const std::string user   = prompt.substr(static_cast<size_t>(prompt_attn_range.first),
+                                                static_cast<size_t>(prompt_attn_range.second - prompt_attn_range.first));
+        const auto parsed        = parse_prompt_attention(user);
+        if (parsed.size() != 1 || parsed[0].first != user) {
+            LOG_WARN("flux shape masks ignored: attention-weight syntax changes token boundaries");
+            return;
+        }
+
+        auto* bpe = dynamic_cast<BPETokenizer*>(tokenizer.get());
+        if (bpe == nullptr) {
+            LOG_WARN("flux shape masks ignored: text encoder is not a BPE tokenizer");
+            return;
+        }
+
+        std::vector<int> prefix_tokens;
+        std::vector<int> user_tokens;
+        std::vector<int> spanned_tokens;
+        std::vector<std::pair<size_t, size_t>> spans;
+        std::string error;
+        if (!tokenizer->encode(prefix, prefix_tokens, nullptr, &error) ||
+            !tokenizer->encode(user, user_tokens, nullptr, &error) ||
+            !bpe->encode_token_spans(user, spanned_tokens, spans, &error) ||
+            spanned_tokens != user_tokens || spans.size() != user_tokens.size()) {
+            LOG_WARN("flux shape masks ignored: %s", error.empty() ? "token spans did not match the prompt" : error.c_str());
+            return;
+        }
+
+        const int base = (tokenizer->bos_token_added() ? 1 : 0) + static_cast<int>(prefix_tokens.size()) -
+                         prompt_template_encode_start_idx;
+        const int64_t sequence = result.c_crossattn.empty() ? 0 : result.c_crossattn.shape()[1];
+        for (const ShapeMaskInput& input : *shape_masks) {
+            if (input.grid_w <= 0 || input.grid_h <= 0 ||
+                input.weights.size() != static_cast<size_t>(input.grid_w) * static_cast<size_t>(input.grid_h) ||
+                input.end <= input.start) {
+                continue;
+            }
+            ShapeTokenMask mapped;
+            mapped.grid_w  = input.grid_w;
+            mapped.grid_h  = input.grid_h;
+            mapped.weights = input.weights;
+            for (size_t i = 0; i < spans.size(); ++i) {
+                if (static_cast<int>(spans[i].second) <= input.start || static_cast<int>(spans[i].first) >= input.end) {
+                    continue;
+                }
+                const int index = base + static_cast<int>(i);
+                if (index < 0 || index >= sequence) {
+                    continue;
+                }
+                mapped.token_indices.push_back(index);
+            }
+            if (mapped.token_indices.empty()) {
+                LOG_WARN("flux shape mask [%d, %d) matched no tokens", input.start, input.end);
+                continue;
+            }
+            LOG_INFO("flux shape mask [%d, %d) -> %zu tokens on %dx%d",
+                     input.start,
+                     input.end,
+                     mapped.token_indices.size(),
+                     mapped.grid_w,
+                     mapped.grid_h);
+            result.shape_token_masks.push_back(std::move(mapped));
+        }
+    }
+
     SDCondition get_learned_condition(int n_threads,
                                       const ConditionerParams& conditioner_params) override {
         std::string prompt;
@@ -3161,6 +3242,13 @@ struct LLMEmbedder : public Conditioner {
             }
             int64_t tag_count    = static_cast<int64_t>(tags.size());
             result.c_token_types = sd::Tensor<int32_t>({tag_count}, std::move(tags));
+        }
+        if (version == VERSION_FLUX2) {
+            attach_flux2_shape_masks(result,
+                                     prompt,
+                                     prompt_attn_range,
+                                     prompt_template_encode_start_idx,
+                                     conditioner_params.shape_masks);
         }
         return result;
     }

@@ -41,6 +41,12 @@ public:
     virtual ~BPETokenizer() = default;
 
     bool encode(const std::string& text, std::vector<int>& tokens, on_new_token_cb_t on_new_token_cb = nullptr, std::string* error = nullptr) override;
+    // Token ids match encode(). Each span is a UTF-8 byte range in text, shared by the
+    // BPE pieces of one pretoken.
+    bool encode_token_spans(const std::string& text,
+                            std::vector<int>& tokens,
+                            std::vector<std::pair<size_t, size_t>>& byte_spans,
+                            std::string* error = nullptr);
 };
 
 #endif  // __SD_TOKENIZERS_BPE_TOKENIZER_H__

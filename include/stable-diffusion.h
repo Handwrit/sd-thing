@@ -410,6 +410,8 @@ typedef struct {
     bool circular_x;
     bool circular_y;
     const char* nag_prompt;
+    // JSON array of Flux.2 shape masks: [{start, end, w, h, grid}]. Null leaves attention unchanged.
+    const char* shape_masks;
 } sd_img_gen_params_t;
 
 typedef struct {

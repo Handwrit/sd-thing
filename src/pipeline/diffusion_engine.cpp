@@ -2410,6 +2410,9 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
                     flux_extra.nag_tau     = nag_params.tau;
                     flux_extra.nag_alpha   = nag_params.alpha;
                 }
+                if (!condition.shape_token_masks.empty()) {
+                    flux_extra.shape_token_masks = &condition.shape_token_masks;
+                }
                 diffusion_params.extra = flux_extra;
             } else if (version == VERSION_QWEN_IMAGE_2_1) {
                 diffusion_params.extra = QwenImage21DiffusionExtra{&condition.c_token_types};

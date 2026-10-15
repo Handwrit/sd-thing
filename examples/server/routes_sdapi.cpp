@@ -128,6 +128,9 @@ static bool build_sdapi_img_gen_request(const json& j,
     if (has_nag_prompt) {
         request.gen_params.nag_prompt = nag_prompt;
     }
+    if (j.contains("shape_masks") && j["shape_masks"].is_array()) {
+        request.gen_params.shape_masks_json = j["shape_masks"].dump();
+    }
     request.gen_params.seed                           = seed;
     request.gen_params.sample_params.sample_steps     = steps;
     request.gen_params.batch_count                    = batch_size;

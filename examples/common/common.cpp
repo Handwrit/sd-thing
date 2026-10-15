@@ -2048,6 +2048,9 @@ bool SDGenerationParams::from_json_str(
     load_if_exists("prompt", prompt);
     load_if_exists("negative_prompt", negative_prompt);
     load_if_exists("nag_prompt", nag_prompt);
+    if (j.contains("shape_masks") && j["shape_masks"].is_array()) {
+        shape_masks_json = j["shape_masks"].dump();
+    }
     load_if_exists("ad_model", ad_model_path);
     load_if_exists("ad_prompt", ad_prompt);
     load_if_exists("ad_negative_prompt", ad_negative_prompt);
@@ -2681,6 +2684,7 @@ sd_img_gen_params_t SDGenerationParams::to_sd_img_gen_params_t() {
     params.prompt              = prompt.c_str();
     params.negative_prompt     = negative_prompt.c_str();
     params.nag_prompt          = nag_prompt.c_str();
+    params.shape_masks         = shape_masks_json.empty() ? nullptr : shape_masks_json.c_str();
     params.clip_skip           = clip_skip;
     params.init_image          = init_image.get();
     params.ref_images          = ref_image_views.empty() ? nullptr : ref_image_views.data();

@@ -6,6 +6,7 @@
 #include <ctime>
 
 #include "diffusion_engine.h"
+#include "json.hpp"
 #include "runtime/denoiser.hpp"
 
 namespace sd::pipeline {
@@ -128,10 +129,115 @@ namespace sd::pipeline {
         return eta;
     }
 
+    static int shape_mask_b64_value(char c) {
+        if (c >= 'A' && c <= 'Z') {
+            return c - 'A';
+        }
+        if (c >= 'a' && c <= 'z') {
+            return c - 'a' + 26;
+        }
+        if (c >= '0' && c <= '9') {
+            return c - '0' + 52;
+        }
+        if (c == '+') {
+            return 62;
+        }
+        if (c == '/') {
+            return 63;
+        }
+        return -1;
+    }
+
+    static std::vector<float> decode_shape_grid(const std::string& grid, size_t expected) {
+        std::vector<int> bytes;
+        bytes.reserve(expected);
+        int value = 0;
+        int bits  = 0;
+        for (unsigned char raw : grid) {
+            if (raw == '=' || raw == '\n' || raw == '\r' || raw == ' ') {
+                continue;
+            }
+            const int piece = shape_mask_b64_value(static_cast<char>(raw));
+            if (piece < 0) {
+                return {};
+            }
+            value = (value << 6) | piece;
+            bits += 6;
+            if (bits >= 8) {
+                bits -= 8;
+                bytes.push_back((value >> bits) & 0xff);
+            }
+        }
+        if (bytes.size() != expected) {
+            return {};
+        }
+        std::vector<float> weights(expected);
+        for (size_t i = 0; i < expected; ++i) {
+            weights[i] = static_cast<float>(bytes[i]) / 255.f;
+        }
+        return weights;
+    }
+
+    static std::vector<ShapeMaskInput> decode_shape_masks(const std::string& json_text) {
+        std::vector<ShapeMaskInput> masks;
+        if (json_text.empty()) {
+            return masks;
+        }
+        nlohmann::json parsed;
+        try {
+            parsed = nlohmann::json::parse(json_text);
+        } catch (...) {
+            LOG_WARN("shape masks ignored: JSON parse failed");
+            return masks;
+        }
+        if (!parsed.is_array()) {
+            LOG_WARN("shape masks ignored: expected a JSON array");
+            return masks;
+        }
+        for (const auto& item : parsed) {
+            if (!item.is_object() || !item.contains("grid") || !item["grid"].is_string()) {
+                continue;
+            }
+            const int start = item.value("start", -1);
+            const int end   = item.value("end", -1);
+            const int width = item.value("w", 0);
+            const int height = item.value("h", 0);
+            if (start < 0 || end <= start || width <= 0 || height <= 0 || width > 256 || height > 256) {
+                LOG_WARN("shape mask ignored: bad span or grid size");
+                continue;
+            }
+            const size_t cells = static_cast<size_t>(width) * static_cast<size_t>(height);
+            std::vector<float> weights = decode_shape_grid(item["grid"].get<std::string>(), cells);
+            if (weights.empty()) {
+                LOG_WARN("shape mask ignored: grid bytes do not match %dx%d", width, height);
+                continue;
+            }
+            bool painted = false;
+            for (float weight : weights) {
+                if (weight > 0.f) {
+                    painted = true;
+                    break;
+                }
+            }
+            if (!painted) {
+                continue;
+            }
+            ShapeMaskInput mask;
+            mask.start   = start;
+            mask.end     = end;
+            mask.grid_w  = width;
+            mask.grid_h  = height;
+            mask.weights = std::move(weights);
+            masks.push_back(std::move(mask));
+        }
+        return masks;
+    }
+
     GenerationRequest::GenerationRequest(StableDiffusionGGML* sd, const sd_img_gen_params_t* sd_img_gen_params) {
         prompt                      = SAFE_STR(sd_img_gen_params->prompt);
         negative_prompt             = SAFE_STR(sd_img_gen_params->negative_prompt);
         nag_prompt                  = SAFE_STR(sd_img_gen_params->nag_prompt);
+        shape_masks                 = decode_shape_masks(SAFE_STR(sd_img_gen_params->shape_masks));
         width                       = sd_img_gen_params->width;
         height                      = sd_img_gen_params->height;
         vae_scale_factor            = sd->get_vae_scale_factor();

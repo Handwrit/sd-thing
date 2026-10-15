@@ -3,6 +3,8 @@
 
 #include <array>
 #include <cinttypes>
+#include <cmath>
+#include <cstring>
 #include <memory>
 #include <vector>
 #include "core/ggml_extend_backend.h"
@@ -552,7 +554,8 @@ namespace Flux {
                               ggml_tensor* pe_neg                 = nullptr,
                               float nag_scale                     = 1.f,
                               float nag_tau                       = 2.5f,
-                              float nag_alpha                     = 0.25f) {
+                              float nag_alpha                     = 0.25f,
+                              bool mask_negative                  = true) {
             // img: [N, n_img_token, hidden_size]
             // txt: [N, n_txt_token, hidden_size]
             // pe: [n_img_token + n_txt_token, d_head/2, 2, 2]
@@ -619,7 +622,7 @@ namespace Flux {
                 auto q_neg    = ggml_concat(ctx->ggml_ctx, neg_qkv[0], img_q, 2);
                 auto k_neg    = ggml_concat(ctx->ggml_ctx, neg_qkv[1], img_k, 2);
                 auto v_neg    = ggml_concat(ctx->ggml_ctx, neg_qkv[2], img_v, 2);
-                auto attn_neg = Rope::attention(ctx, q_neg, k_neg, v_neg, pe_neg, mask);
+                auto attn_neg = Rope::attention(ctx, q_neg, k_neg, v_neg, pe_neg, mask_negative ? mask : nullptr);
 
                 auto txt_attn_pos = ggml_view_3d(ctx->ggml_ctx, attn_pos, attn_pos->ne[0], txt->ne[1], attn_pos->ne[2], attn_pos->nb[1], attn_pos->nb[2], 0);
                 auto img_attn_pos = ggml_view_3d(ctx->ggml_ctx, attn_pos, attn_pos->ne[0], img->ne[1], attn_pos->ne[2], attn_pos->nb[1], attn_pos->nb[2], txt->ne[1] * attn_pos->nb[1]);
@@ -800,7 +803,8 @@ namespace Flux {
                                  float nag_scale,
                                  float nag_tau,
                                  float nag_alpha,
-                                 ggml_tensor** txt_neg_out) {
+                                 ggml_tensor** txt_neg_out,
+                                 bool mask_negative = true) {
             auto linear1  = std::dynamic_pointer_cast<Linear>(blocks["linear1"]);
             auto linear2  = std::dynamic_pointer_cast<Linear>(blocks["linear2"]);
             auto norm     = std::dynamic_pointer_cast<QKNorm>(blocks["norm"]);
@@ -874,7 +878,7 @@ namespace Flux {
             auto q_neg    = ggml_concat(ctx->ggml_ctx, ggml_cont(ctx->ggml_ctx, neg[0]), token_slice(pos[0], n_txt, n_img), 2);
             auto k_neg    = ggml_concat(ctx->ggml_ctx, ggml_cont(ctx->ggml_ctx, neg[1]), token_slice(pos[1], n_txt, n_img), 2);
             auto v_neg    = ggml_concat(ctx->ggml_ctx, ggml_cont(ctx->ggml_ctx, neg[2]), token_slice(pos[2], n_txt, n_img), 2);
-            auto attn_neg = Rope::attention(ctx, q_neg, k_neg, v_neg, pe_neg, mask);
+            auto attn_neg = Rope::attention(ctx, q_neg, k_neg, v_neg, pe_neg, mask_negative ? mask : nullptr);
 
             auto token_rows = [&](ggml_tensor* attn, int64_t offset, int64_t count) {
                 return ggml_cont(ctx->ggml_ctx,
@@ -1228,7 +1232,8 @@ namespace Flux {
                                   ggml_tensor* pe_neg           = nullptr,
                                   float nag_scale               = 1.f,
                                   float nag_tau                 = 2.5f,
-                                  float nag_alpha               = 0.25f) {
+                                  float nag_alpha               = 0.25f,
+                                  ggml_tensor* shape_mask       = nullptr) {
             auto img_in      = std::dynamic_pointer_cast<Linear>(blocks["img_in"]);
             auto txt_in      = std::dynamic_pointer_cast<Linear>(blocks["txt_in"]);
             auto final_layer = std::dynamic_pointer_cast<LastLayer>(blocks["final_layer"]);
@@ -1239,6 +1244,8 @@ namespace Flux {
 
             ggml_tensor* vec;
             ggml_tensor* txt_img_mask = nullptr;
+            ggml_tensor* attn_mask    = shape_mask != nullptr ? shape_mask : nullptr;
+            const bool mask_negative  = shape_mask == nullptr;
             if (config.is_chroma) {
                 int64_t mod_index_length = 344;
                 auto approx              = std::dynamic_pointer_cast<ChromaApproximator>(blocks["distilled_guidance_layer"]);
@@ -1336,14 +1343,15 @@ namespace Flux {
                                                txt,
                                                vec,
                                                pe,
-                                               txt_img_mask,
+                                               attn_mask != nullptr ? attn_mask : txt_img_mask,
                                                ds_img_mods,
                                                ds_txt_mods,
                                                txt_neg,
                                                pe_neg,
                                                nag_scale,
                                                nag_tau,
-                                               nag_alpha);
+                                               nag_alpha,
+                                               mask_negative);
                 img          = img_txt.img;
                 txt          = img_txt.txt;
                 txt_neg      = img_txt.txt_neg != nullptr ? img_txt.txt_neg : txt_neg;
@@ -1380,16 +1388,17 @@ namespace Flux {
                                                 vec,
                                                 pe,
                                                 pe_neg,
-                                                txt_img_mask,
+                                                attn_mask != nullptr ? attn_mask : txt_img_mask,
                                                 ss_mods,
                                                 nag_scale,
                                                 nag_tau,
                                                 nag_alpha,
-                                                &txt_neg_next);
+                                                &txt_neg_next,
+                                                mask_negative);
                     txt_neg                   = txt_neg_next;
                     sd::ggml_graph_cut::mark_graph_cut(txt_neg, "flux.single_blocks." + std::to_string(i), "txt_neg");
                 } else {
-                    txt_img = block->forward(ctx, txt_img, vec, pe, txt_img_mask, ss_mods);
+                    txt_img = block->forward(ctx, txt_img, vec, pe, attn_mask != nullptr ? attn_mask : txt_img_mask, ss_mods);
                 }
                 sd::ggml_graph_cut::mark_graph_cut(txt_img, "flux.single_blocks." + std::to_string(i), "txt_img");
 
@@ -1537,7 +1546,8 @@ namespace Flux {
                                          ggml_tensor* pe_neg                   = nullptr,
                                          float nag_scale                       = 1.f,
                                          float nag_tau                         = 2.5f,
-                                         float nag_alpha                       = 0.25f) {
+                                         float nag_alpha                       = 0.25f,
+                                         ggml_tensor* shape_mask               = nullptr) {
             GGML_ASSERT(x->ne[3] == 1);
 
             int64_t W      = x->ne[0];
@@ -1585,7 +1595,7 @@ namespace Flux {
             }
 
             auto out = forward_orig(ctx, img, context, timestep, y, guidance, pe, mod_index_arange, skip_layers,
-                                    pulid_id, pulid_id_weight, nag_context, pe_neg, nag_scale, nag_tau, nag_alpha);  // [N, num_tokens, C * patch_size * patch_size]
+                                    pulid_id, pulid_id_weight, nag_context, pe_neg, nag_scale, nag_tau, nag_alpha, shape_mask);  // [N, num_tokens, C * patch_size * patch_size]
 
             if (out->ne[1] > img_tokens) {
                 out = ggml_view_3d(ctx->ggml_ctx, out, out->ne[0], img_tokens, out->ne[2], out->nb[1], out->nb[2], 0);
@@ -1614,7 +1624,8 @@ namespace Flux {
                              ggml_tensor* pe_neg                   = nullptr,
                              float nag_scale                       = 1.f,
                              float nag_tau                         = 2.5f,
-                             float nag_alpha                       = 0.25f) {
+                             float nag_alpha                       = 0.25f,
+                             ggml_tensor* shape_mask               = nullptr) {
             // Forward pass of DiT.
             // x: (N, C, H, W) tensor of spatial inputs (images or latent representations of images)
             // timestep: (N,) tensor of diffusion timesteps
@@ -1659,7 +1670,8 @@ namespace Flux {
                                            pe_neg,
                                            nag_scale,
                                            nag_tau,
-                                           nag_alpha);
+                                           nag_alpha,
+                                           shape_mask);
             }
         }
     };
@@ -1672,6 +1684,9 @@ namespace Flux {
         std::vector<float> pe_neg_vec;
         std::vector<float> mod_index_arange_vec;
         std::vector<float> dct_vec;
+        std::vector<float> shape_mask_vec;
+        uint64_t shape_mask_key = 0;
+        bool shape_mask_warned  = false;
         sd::Tensor<float> guidance_tensor;
         SDVersion version;
         bool use_mask = true;
@@ -1762,6 +1777,120 @@ namespace Flux {
             return dct;
         }
 
+        static int shape_cell_bias_count(int length, int patch) {
+            return (length + (patch / 2)) / patch;
+        }
+
+        ggml_tensor* make_shape_mask(int n_txt,
+                                     int canvas_w,
+                                     int canvas_h,
+                                     int n_img,
+                                     const std::vector<ShapeTokenMask>* masks) {
+            if (masks == nullptr || masks->empty() || n_txt <= 0 || canvas_w <= 0 || canvas_h <= 0 || n_img < canvas_w * canvas_h) {
+                return nullptr;
+            }
+            const int canvas = canvas_w * canvas_h;
+            std::vector<const ShapeTokenMask*> by_token(static_cast<size_t>(n_txt), nullptr);
+            bool any = false;
+            for (const ShapeTokenMask& mask : *masks) {
+                if (mask.grid_w != canvas_w || mask.grid_h != canvas_h ||
+                    mask.weights.size() != static_cast<size_t>(canvas)) {
+                    if (!shape_mask_warned) {
+                        LOG_WARN("flux shape mask skipped: painted grid %dx%d does not match the %dx%d latent",
+                                 mask.grid_w,
+                                 mask.grid_h,
+                                 canvas_w,
+                                 canvas_h);
+                        shape_mask_warned = true;
+                    }
+                    continue;
+                }
+                for (int index : mask.token_indices) {
+                    if (index < 0 || index >= n_txt || by_token[static_cast<size_t>(index)] != nullptr) {
+                        continue;
+                    }
+                    by_token[static_cast<size_t>(index)] = &mask;
+                    any                                  = true;
+                }
+            }
+            if (!any) {
+                return nullptr;
+            }
+            shape_mask_warned = false;
+
+            const int length = n_txt + n_img;
+            uint64_t key     = 1469598103934665603ull;
+            auto mix         = [&](uint64_t value) {
+                key ^= value;
+                key *= 1099511628211ull;
+            };
+            mix(static_cast<uint64_t>(n_txt));
+            mix(static_cast<uint64_t>(canvas_w));
+            mix(static_cast<uint64_t>(canvas_h));
+            mix(static_cast<uint64_t>(n_img));
+            for (const ShapeTokenMask& mask : *masks) {
+                if (by_token.empty()) {
+                    break;
+                }
+                for (int index : mask.token_indices) {
+                    if (index < 0 || index >= n_txt || by_token[static_cast<size_t>(index)] != &mask) {
+                        continue;
+                    }
+                    mix(static_cast<uint64_t>(index));
+                }
+                for (float weight : mask.weights) {
+                    uint32_t bits = 0;
+                    static_assert(sizeof(bits) == sizeof(weight), "shape mask hash expects 32-bit floats");
+                    std::memcpy(&bits, &weight, sizeof(bits));
+                    mix(bits);
+                }
+            }
+            const size_t mask_values = static_cast<size_t>(length) * static_cast<size_t>(length);
+            if (key != shape_mask_key || shape_mask_vec.size() != mask_values) {
+                shape_mask_key = key;
+            shape_mask_vec.assign(mask_values, 0.f);
+            const float blocked = -1.0e4f;
+            auto bias_for = [&](int token, int cell) {
+                const ShapeTokenMask* mask = by_token[static_cast<size_t>(token)];
+                if (mask == nullptr) {
+                    return 0.f;
+                }
+                const float weight = mask->weights[static_cast<size_t>(cell)];
+                if (weight >= 0.999f) {
+                    return 0.f;
+                }
+                if (weight <= 0.001f) {
+                    return blocked;
+                }
+                return std::log(weight);
+            };
+            for (int query = 0; query < length; ++query) {
+                const bool query_text   = query < n_txt;
+                const int query_cell    = query - n_txt;
+                const bool query_canvas = !query_text && query_cell < canvas;
+                for (int key = 0; key < length; ++key) {
+                    const bool key_text   = key < n_txt;
+                    const int key_cell    = key - n_txt;
+                    const bool key_canvas = !key_text && key_cell < canvas;
+                    float bias            = 0.f;
+                    if (query_text && key_canvas) {
+                        bias = bias_for(query, key_cell);
+                    } else if (key_text && query_canvas) {
+                        bias = bias_for(key, query_cell);
+                    }
+                    if (bias != 0.f) {
+                        shape_mask_vec[static_cast<size_t>(key) + static_cast<size_t>(query) * static_cast<size_t>(length)] = bias;
+                    }
+                }
+            }
+            }
+
+            auto mask = ggml_new_tensor_4d(compute_ctx, GGML_TYPE_F32, length, length, 1, 1);
+            ggml_set_name(mask, "flux.shape_mask");
+            set_backend_tensor_data(mask, shape_mask_vec.data());
+            return mask;
+        }
+
         ggml_cgraph* build_graph(const sd::Tensor<float>& x_tensor,
                                  const sd::Tensor<float>& timesteps_tensor,
                                  const sd::Tensor<float>& context_tensor                  = {},
@@ -1776,7 +1905,8 @@ namespace Flux {
                                  const sd::Tensor<float>& nag_context_tensor              = {},
                                  float nag_scale                                          = 1.f,
                                  float nag_tau                                            = 2.5f,
-                                 float nag_alpha                                          = 0.25f) {
+                                 float nag_alpha                                          = 0.25f,
+                                 const std::vector<ShapeTokenMask>* shape_token_masks     = nullptr) {
             ggml_tensor* x         = make_input(x_tensor);
             ggml_tensor* timesteps = make_input(timesteps_tensor);
             ggml_tensor* context   = make_optional_input(context_tensor);
@@ -1800,7 +1930,12 @@ namespace Flux {
             GGML_ASSERT(x->ne[3] == 1);
             const bool use_nag       = version == VERSION_FLUX2 && !nag_context_tensor.empty() && nag_scale > 1.f;
             ggml_tensor* nag_context = use_nag ? make_input(nag_context_tensor) : nullptr;
-            ggml_cgraph* gf          = new_graph_custom(use_nag ? static_cast<size_t>(FLUX_GRAPH_SIZE) * 4 : FLUX_GRAPH_SIZE);
+            const bool use_shapes    = shape_token_masks != nullptr && !shape_token_masks->empty();
+            size_t graph_size        = use_nag ? static_cast<size_t>(FLUX_GRAPH_SIZE) * 4 : FLUX_GRAPH_SIZE;
+            if (use_shapes) {
+                graph_size *= 2;
+            }
+            ggml_cgraph* gf = new_graph_custom(graph_size);
 
             ggml_tensor* mod_index_arange = nullptr;
             ggml_tensor* dct              = nullptr;  // for chroma radiance
@@ -1863,6 +1998,22 @@ namespace Flux {
                                         ? nullptr
                                         : make_input(pulid_id_tensor);
 
+            ggml_tensor* shape_mask = nullptr;
+            if (use_shapes && sd_version_is_flux2(version)) {
+                int ref_cells = 0;
+                for (ggml_tensor* ref : ref_latents) {
+                    ref_cells += shape_cell_bias_count(static_cast<int>(ref->ne[1]), config.patch_size) *
+                                 shape_cell_bias_count(static_cast<int>(ref->ne[0]), config.patch_size);
+                }
+                const int canvas_h = shape_cell_bias_count(static_cast<int>(x->ne[1]), config.patch_size);
+                const int canvas_w = shape_cell_bias_count(static_cast<int>(x->ne[0]), config.patch_size);
+                shape_mask         = make_shape_mask(static_cast<int>(context->ne[1]),
+                                             canvas_w,
+                                             canvas_h,
+                                             canvas_w * canvas_h + ref_cells,
+                                             shape_token_masks);
+            }
+
             auto runner_ctx = get_context();
 
             ggml_tensor* out = flux.forward(&runner_ctx,
@@ -1883,7 +2034,8 @@ namespace Flux {
                                             pe_neg,
                                             nag_scale,
                                             nag_tau,
-                                            nag_alpha);
+                                            nag_alpha,
+                                            shape_mask);
 
             ggml_build_forward_expand(gf, out);
 
@@ -1905,7 +2057,8 @@ namespace Flux {
                                   const sd::Tensor<float>& nag_context              = {},
                                   float nag_scale                                   = 1.f,
                                   float nag_tau                                     = 2.5f,
-                                  float nag_alpha                                   = 0.25f) {
+                                  float nag_alpha                                   = 0.25f,
+                                  const std::vector<ShapeTokenMask>* shape_token_masks = nullptr) {
             // x: [N, in_channels, h, w]
             // timesteps: [N, ]
             // context: [N, max_position, hidden_size]
@@ -1913,7 +2066,7 @@ namespace Flux {
             // guidance: [N, ]
             // pulid_id: empty (no injection) or [N, num_id_tokens=32, kv_dim=2048]
             auto get_graph = [&]() -> ggml_cgraph* {
-                return build_graph(x, timesteps, context, c_concat, y, guidance, ref_latents, ref_index_mode, skip_layers, pulid_id, pulid_id_weight, nag_context, nag_scale, nag_tau, nag_alpha);
+                return build_graph(x, timesteps, context, c_concat, y, guidance, ref_latents, ref_index_mode, skip_layers, pulid_id, pulid_id_weight, nag_context, nag_scale, nag_tau, nag_alpha, shape_token_masks);
             };
 
             auto result = restore_trailing_singleton_dims(GGMLRunner::compute(get_graph, n_threads, false), x.dim());
@@ -1942,7 +2095,8 @@ namespace Flux {
                            tensor_or_empty(extra->nag_context),
                            extra->nag_scale,
                            extra->nag_tau,
-                           extra->nag_alpha);
+                           extra->nag_alpha,
+                           extra->shape_token_masks);
         }
 
         void test() {

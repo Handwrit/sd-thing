@@ -35,6 +35,9 @@ public:
 
     virtual void add_special_token(const std::string& token);
     bool is_special_token(const std::string& token) const;
+    bool bos_token_added() const {
+        return add_bos_token;
+    }
     // An empty output may be valid; failures return false and clear the output.
     virtual bool encode(const std::string& text, std::vector<int>& tokens, on_new_token_cb_t on_new_token_cb = nullptr, std::string* error = nullptr) = 0;
     bool tokenize(const std::string& text,
