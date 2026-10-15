@@ -471,7 +471,7 @@
     .is-ice:read-only,
     .is-ice:disabled {
       background: #d7eef8 !important;
-      color: #16384a !important;
+      color: #3a3a3a !important;
       border-color: #7eb6d6 !important;
     }
     #useShapesBtn.is-on {
@@ -506,11 +506,12 @@
       padding: 0.7rem 0.8rem 0.2rem;
       font-size: 0.95rem;
     }
-    .shape-meta {
+    .shape-meta, .shape-hint {
       padding: 0 0.8rem 0.6rem;
       color: var(--muted);
       font-size: 0.75rem;
     }
+    .shape-hint { padding-top: 0; }
     .shape-words {
       flex: 1;
       min-height: 0;
@@ -564,6 +565,15 @@
       text-transform: none;
     }
     .shape-tools input[type="range"] { width: 7rem; }
+    .shape-key {
+      margin-left: 0.3rem;
+      opacity: 0.75;
+      font-size: 0.68rem;
+      font-family: inherit;
+      background: transparent;
+      border: 0;
+      padding: 0;
+    }
     .shape-board {
       flex: 1;
       min-height: 0;
@@ -572,8 +582,20 @@
       justify-content: center;
       background: #2a2e3a;
       overflow: auto;
+      touch-action: none;
+      box-sizing: border-box;
     }
     #shapeCanvas { cursor: crosshair; image-rendering: pixelated; touch-action: none; }
+    .shape-foot-spacer { flex: 1; }
+    #shapeDropAsk span { margin-right: auto; }
+    #shapeDropYes {
+      flex: 0 0 auto;
+      margin-left: 0.9rem;
+      background: #a12622;
+      border-color: #7d1c19;
+      color: #fff;
+    }
+    #shapeDropYes:hover { background: #c2342e; }
     .shape-tool.is-on { background: var(--accent); color: white; border-color: var(--accent); }
     .settings-dialog .btn-primary,
     .settings-dialog .btn-secondary {
@@ -1014,20 +1036,25 @@
     <div class="shape-side">
       <h2>Shapes</h2>
       <div class="shape-meta" id="shapeMeta"></div>
+      <div class="shape-hint">Ctrl+click a word to copy it onto the selected one. Ctrl+Shift+click subtracts it. Ctrl+click the board to draw a line from the last dab.</div>
       <div class="shape-words" id="shapeWords"></div>
     </div>
     <div class="shape-main">
       <div class="shape-tools">
-        <button class="btn-secondary shape-tool" type="button" data-shape-tool="pencil">Pencil</button>
-        <button class="btn-secondary shape-tool" type="button" data-shape-tool="hard">Hard</button>
-        <button class="btn-secondary shape-tool" type="button" data-shape-tool="soft">Soft</button>
-        <label>Size <input type="range" id="shapeSize" min="1" max="48" step="1" value="8" /></label>
+        <button class="btn-secondary shape-tool" type="button" data-shape-tool="pencil">Pencil <kbd class="shape-key">P</kbd></button>
+        <button class="btn-secondary shape-tool" type="button" data-shape-tool="hard">Hard <kbd class="shape-key">H</kbd></button>
+        <button class="btn-secondary shape-tool" type="button" data-shape-tool="soft">Soft <kbd class="shape-key">S</kbd></button>
+        <label>Size <kbd class="shape-key">[ ]</kbd> <input type="range" id="shapeSize" min="1" max="48" step="1" value="8" /></label>
         <label>Opacity <input type="range" id="shapeOpacity" min="0.05" max="1" step="0.05" value="1" /></label>
-        <button class="btn-secondary" type="button" id="shapeModeBtn">Draw</button>
-        <button class="btn-secondary" type="button" id="shapeViewBtn">Blended</button>
+        <button class="btn-secondary" type="button" id="shapeModeBtn">Draw <kbd class="shape-key">E</kbd></button>
+        <button class="btn-secondary" type="button" id="shapeViewBtn">Blended <kbd class="shape-key">V</kbd></button>
+        <button class="btn-secondary" type="button" id="shapeInvertBtn">Invert <kbd class="shape-key">I</kbd></button>
+        <button class="btn-secondary" type="button" id="shapeClearBtn">Clear <kbd class="shape-key">C</kbd></button>
       </div>
       <div class="shape-board" id="shapeBoard"><canvas id="shapeCanvas"></canvas></div>
       <div class="shape-foot" id="shapeFoot">
+        <button class="btn-secondary" type="button" id="shapeCancelBtn">Cancel</button>
+        <span class="shape-foot-spacer"></span>
         <button class="btn-secondary" type="button" id="shapeDropBtn">Drop shapes</button>
         <button class="btn-primary" type="button" id="shapeSaveBtn">Save shapes</button>
       </div>
@@ -2569,8 +2596,8 @@
       };
     }
 
-    function applyParsedPrompts(parsed, replaceEmpty) {
-      if (!shapeState) document.getElementById('prompt').value = parsed.positive;
+    function applyParsedPrompts(parsed, replaceEmpty, forcePrompt) {
+      if (forcePrompt || !shapeState) document.getElementById('prompt').value = parsed.positive;
       if (typeof parsed.negative === 'string' && (replaceEmpty || parsed.negative.trim() !== '')) {
         document.getElementById('negPrompt').value = parsed.negative;
       }
@@ -2690,6 +2717,7 @@
       } else if (!hasScheduler) {
         document.getElementById('scheduler').value = '';
       }
+      if (!installShapeRecord(record, document.getElementById('prompt').value)) releaseShapes();
       if (record.hires && typeof record.hires === 'object') {
         document.getElementById('enableHr').checked = !!record.hires.enabled;
         setNumericFields(['hrScale'], record.hires.scale);
@@ -2841,13 +2869,16 @@
         setStatusText('No generation metadata in that PNG', false);
         return false;
       }
-      if (parsed && typeof parsed.positive === 'string') applyParsedPrompts(parsed, true);
+      if (parsed && typeof parsed.positive === 'string') applyParsedPrompts(parsed, true, true);
       const nagInJson = !!(record && record.prompt && typeof record.prompt.nag === 'string' && record.prompt.nag.trim() !== '');
       if (recordIsFlux(record) && !nagInJson) {
         document.getElementById('nagPrompt').value = '';
       }
       const missingInit = record ? applyGenerationRecord(record) : false;
-      if (!record && text) applyTextGenerationLine(text);
+      if (!record && text) {
+        applyTextGenerationLine(text);
+        releaseShapes();
+      }
       const recovered = recoverSourceImages(sources);
       syncDesigner();
       syncSizeReadout();
@@ -2858,6 +2889,7 @@
       if (recovered) note = ' (' + recovered + ' source image' + (recovered === 1 ? '' : 's') + ')';
       else if (missingInit) note = ' (init image is not in the file)';
       setStatusText('Loaded settings from ' + label + note, false);
+      persistSession();
       return true;
     }
 
@@ -3714,6 +3746,11 @@
     let shapeState = null;
     let shapePainting = false;
     let shapeLast = null;
+    let shapeAnchor = null;
+    let shapePointer = null;
+    let shapeGuide = null;
+    let shapeCheckpoint = null;
+    let shapeSizeTimer = 0;
 
     function utf8Offset(text, index) {
       return new TextEncoder().encode(text.slice(0, index)).length;
@@ -3816,7 +3853,7 @@
         gridW: Number(saved.gridW),
         gridH: Number(saved.gridH),
         selected: Number(saved.selected) || 0,
-        view: saved.view === 'solo' ? 'solo' : 'blended',
+        view: saved.view === 'solo' || saved.view === 'fade' ? saved.view : 'blended',
         tool: saved.tool === 'pencil' || saved.tool === 'soft' ? saved.tool : 'hard',
         size: Number(saved.size) || 8,
         opacity: Number(saved.opacity) || 1,
@@ -3865,6 +3902,8 @@
           w: shapeState.gridW,
           h: shapeState.gridH,
           grid: bytesToB64(word.cells),
+          text: word.text,
+          color: word.color,
         });
       });
       return masks.length ? masks : null;
@@ -3885,7 +3924,15 @@
         const label = document.createElement('span');
         label.textContent = word.text;
         button.append(swatch, label);
-        button.onclick = () => {
+        button.onclick = (ev) => {
+          if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && index !== shapeState.selected) {
+            subtractShapeOver(index);
+            return;
+          }
+          if ((ev.ctrlKey || ev.metaKey) && index !== shapeState.selected) {
+            copyShapeOver(index);
+            return;
+          }
           shapeState.selected = index;
           renderShapeList();
           redrawShapeCanvas();
@@ -3903,8 +3950,24 @@
       size.value = String(shapeState.size);
       size.disabled = shapeState.tool === 'pencil';
       opacity.value = String(shapeState.opacity);
-      document.getElementById('shapeModeBtn').textContent = shapeState.erase ? 'Erase' : 'Draw';
-      document.getElementById('shapeViewBtn').textContent = shapeState.view === 'solo' ? 'Solo' : 'Blended';
+      const mode = document.getElementById('shapeModeBtn');
+      const view = document.getElementById('shapeViewBtn');
+      mode.textContent = shapeState.erase ? 'Erase' : 'Draw';
+      mode.append(shapeKey('E'));
+      view.textContent = shapeState.view === 'solo' ? 'Solo' : (shapeState.view === 'fade' ? 'Fade' : 'Blended');
+      view.append(shapeKey('V'));
+    }
+
+    function shapeKey(text) {
+      const key = document.createElement('kbd');
+      key.className = 'shape-key';
+      key.textContent = text;
+      return key;
+    }
+
+    function shapeViewMul(index) {
+      if (shapeState.view !== 'fade') return 1;
+      return Math.max(0, 1 - 0.1 * Math.abs(index - shapeState.selected));
     }
 
     function shapeRgb(hex) {
@@ -3943,8 +4006,9 @@
           for (let w = 0; w < shapeState.words.length; w++) {
             const cells = shapeState.words[w].cells;
             const value = cells ? cells[i] : 0;
-            if (!value) continue;
-            const alpha = value / 255;
+            const mul = shapeViewMul(w);
+            if (!value || mul <= 0) continue;
+            const alpha = (value / 255) * mul;
             const color = colors[w];
             const next = [0, 0, 0];
             for (let c = 0; c < 3; c++) {
@@ -3976,14 +4040,50 @@
         }
         ctx.stroke();
       }
+      if (shapeState.showBrush && shapeState.tool !== 'pencil') {
+        const radiusPx = Math.max(1, (Number(shapeState.size) / 2) * cell);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, canvas.height / 2, radiusPx, 0, Math.PI * 2);
+        // White difference on the empty grey board inverts to nearly the same grey.
+        ctx.globalCompositeOperation = 'difference';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = Math.max(4, Math.round(cell * 0.12));
+        ctx.stroke();
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.lineWidth = Math.max(2, Math.round(cell * 0.045));
+        ctx.strokeStyle = '#111';
+        ctx.stroke();
+        ctx.lineWidth = Math.max(1, Math.round(cell * 0.02));
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+        ctx.restore();
+      }
+      if (shapeAnchor && shapeGuide) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(shapeAnchor.x * cell, shapeAnchor.y * cell);
+        ctx.lineTo(shapeGuide.x * cell, shapeGuide.y * cell);
+        ctx.lineWidth = Math.max(3, Math.round(cell * 0.08));
+        ctx.strokeStyle = '#111';
+        ctx.stroke();
+        ctx.lineWidth = Math.max(1, Math.round(cell * 0.03));
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     function layoutShapeBoard() {
       const board = document.getElementById('shapeBoard');
       const canvas = document.getElementById('shapeCanvas');
+      const pad = Math.max(28, Math.min(72, Math.floor(Math.min(board.clientWidth, board.clientHeight) * 0.08)));
+      board.style.padding = pad + 'px';
+      const innerW = Math.max(64, board.clientWidth - pad * 2);
+      const innerH = Math.max(64, board.clientHeight - pad * 2);
       const cell = Math.max(4, Math.floor(Math.min(
-        (board.clientWidth - 16) / shapeState.gridW,
-        (board.clientHeight - 16) / shapeState.gridH
+        innerW / shapeState.gridW,
+        innerH / shapeState.gridH
       )));
       shapeState.cellPx = cell;
       canvas.width = shapeState.gridW * cell;
@@ -4045,8 +4145,141 @@
       shapeLast = to;
     }
 
+    function copyShapeOver(sourceIndex) {
+      const dest = shapeState.words[shapeState.selected];
+      const src = shapeState.words[sourceIndex];
+      if (!dest || !src || dest === src || !src.cells) return;
+      const cells = shapeCells(dest);
+      if (src.cells.length !== cells.length) return;
+      for (let i = 0; i < cells.length; i++) {
+        if (src.cells[i] > cells[i]) cells[i] = src.cells[i];
+      }
+      redrawShapeCanvas();
+      persistSession();
+    }
+
+    function subtractShapeOver(sourceIndex) {
+      const dest = shapeState.words[shapeState.selected];
+      const src = shapeState.words[sourceIndex];
+      if (!dest || !src || dest === src || !src.cells || !dest.cells) return;
+      if (src.cells.length !== dest.cells.length) return;
+      for (let i = 0; i < dest.cells.length; i++) {
+        dest.cells[i] = Math.max(0, dest.cells[i] - src.cells[i]);
+      }
+      redrawShapeCanvas();
+      persistSession();
+    }
+
+    function invertShapeLayer() {
+      const word = shapeState && shapeState.words[shapeState.selected];
+      if (!word) return;
+      const cells = shapeCells(word);
+      for (let i = 0; i < cells.length; i++) cells[i] = 255 - cells[i];
+      redrawShapeCanvas();
+      persistSession();
+    }
+
+    function clearShapeLayer() {
+      const word = shapeState && shapeState.words[shapeState.selected];
+      if (!word || !word.cells) return;
+      word.cells.fill(0);
+      redrawShapeCanvas();
+      persistSession();
+    }
+
+    function flashBrushSize() {
+      if (!shapeState || shapeState.tool === 'pencil') return;
+      shapeState.showBrush = true;
+      redrawShapeCanvas();
+      clearTimeout(shapeSizeTimer);
+      shapeSizeTimer = setTimeout(() => {
+        if (!shapeState) return;
+        shapeState.showBrush = false;
+        redrawShapeCanvas();
+      }, 700);
+    }
+
+    function nudgeShapeSize(delta) {
+      if (!shapeState) return;
+      shapeState.size = Math.max(1, Math.min(48, Math.round(Number(shapeState.size) + delta)));
+      syncShapeControls();
+      flashBrushSize();
+    }
+
+    function cycleShapeView() {
+      if (!shapeState) return;
+      const order = ['blended', 'solo', 'fade'];
+      const at = order.indexOf(shapeState.view);
+      shapeState.view = order[(at < 0 ? 0 : at + 1) % order.length];
+      syncShapeControls();
+      redrawShapeCanvas();
+    }
+
+    function releaseShapes() {
+      shapeState = null;
+      shapePainting = false;
+      shapeLast = null;
+      shapeAnchor = null;
+      shapePointer = null;
+      shapeGuide = null;
+      shapeCheckpoint = null;
+      const overlay = document.getElementById('shapeOverlay');
+      if (overlay) overlay.hidden = true;
+      const ask = document.getElementById('shapeDropAsk');
+      const foot = document.getElementById('shapeFoot');
+      if (ask) ask.hidden = true;
+      if (foot) foot.hidden = false;
+      applyShapeLock();
+    }
+
+    function installShapeRecord(record, promptText) {
+      const masks = record && Array.isArray(record.shape_masks) ? record.shape_masks : [];
+      const usable = masks.filter(mask => mask && Number(mask.w) > 0 && Number(mask.h) > 0 && typeof mask.grid === 'string' && mask.grid);
+      if (!usable.length || typeof promptText !== 'string' || !promptText.trim()) return false;
+      const gridW = Number(usable[0].w);
+      const gridH = Number(usable[0].h);
+      const words = splitShapeWords(promptText);
+      if (!words.length || !gridW || !gridH) return false;
+      const count = gridW * gridH;
+      let matched = false;
+      usable.forEach(mask => {
+        if (Number(mask.w) !== gridW || Number(mask.h) !== gridH) return;
+        const word = words.find(item => item.start === Number(mask.start) && item.end === Number(mask.end));
+        if (!word) return;
+        if (typeof mask.color === 'string') word.color = mask.color;
+        word.cells = b64ToBytes(mask.grid, count);
+        matched = true;
+      });
+      if (!matched) return false;
+      const width = Number(record.width) || gridW * 16;
+      const height = Number(record.height) || gridH * 16;
+      shapeState = {
+        prompt: promptText,
+        width: width,
+        height: height,
+        gridW: gridW,
+        gridH: gridH,
+        words: words,
+        selected: 0,
+        view: 'blended',
+        tool: 'hard',
+        size: 8,
+        opacity: 1,
+        erase: false,
+      };
+      shapeCheckpoint = null;
+      document.getElementById('prompt').value = promptText;
+      document.getElementById('width').value = String(width);
+      document.getElementById('height').value = String(height);
+      const overlay = document.getElementById('shapeOverlay');
+      if (overlay) overlay.hidden = true;
+      applyShapeLock();
+      return true;
+    }
+
     function openShapeEditor() {
       if (!isFlux2Dev() && !shapeState) return;
+      shapeCheckpoint = shapeState ? shapeSession() : null;
       if (!shapeState) {
         const width = Number(document.getElementById('width').value);
         const height = Number(document.getElementById('height').value);
@@ -4090,6 +4323,23 @@
       persistSession();
     }
 
+    function cancelShapes() {
+      shapePainting = false;
+      shapeLast = null;
+      shapeAnchor = null;
+      shapeGuide = null;
+      document.getElementById('shapeOverlay').hidden = true;
+      cancelDropShapes();
+      if (!shapeCheckpoint) {
+        shapeState = null;
+        applyShapeLock();
+        persistSession();
+        return;
+      }
+      restoreShapeSession(shapeCheckpoint);
+      persistSession();
+    }
+
     function askDropShapes() {
       document.getElementById('shapeFoot').hidden = true;
       document.getElementById('shapeDropAsk').hidden = false;
@@ -4123,6 +4373,9 @@
       });
       document.getElementById('useShapesBtn').addEventListener('click', openShapeEditor);
       document.getElementById('shapeSaveBtn').addEventListener('click', saveShapes);
+      document.getElementById('shapeCancelBtn').addEventListener('click', cancelShapes);
+      document.getElementById('shapeInvertBtn').addEventListener('click', invertShapeLayer);
+      document.getElementById('shapeClearBtn').addEventListener('click', clearShapeLayer);
       document.getElementById('shapeDropBtn').addEventListener('click', askDropShapes);
       document.getElementById('shapeDropNo').addEventListener('click', cancelDropShapes);
       document.getElementById('shapeDropYes').addEventListener('click', dropShapes);
@@ -4134,7 +4387,9 @@
         });
       });
       document.getElementById('shapeSize').addEventListener('input', (ev) => {
-        if (shapeState) shapeState.size = Number(ev.target.value);
+        if (!shapeState) return;
+        shapeState.size = Number(ev.target.value);
+        flashBrushSize();
       });
       document.getElementById('shapeOpacity').addEventListener('input', (ev) => {
         if (shapeState) shapeState.opacity = Number(ev.target.value);
@@ -4144,41 +4399,117 @@
         shapeState.erase = !shapeState.erase;
         syncShapeControls();
       });
-      document.getElementById('shapeViewBtn').addEventListener('click', () => {
-        if (!shapeState) return;
-        shapeState.view = shapeState.view === 'solo' ? 'blended' : 'solo';
-        syncShapeControls();
-        redrawShapeCanvas();
-      });
-      const canvas = document.getElementById('shapeCanvas');
-      canvas.addEventListener('pointerdown', (ev) => {
-        if (!shapeState) return;
+      document.getElementById('shapeViewBtn').addEventListener('click', cycleShapeView);
+      const board = document.getElementById('shapeBoard');
+      board.addEventListener('pointerdown', (ev) => {
+        if (!shapeState || ev.button !== 0) return;
+        const point = shapePoint(ev);
+        shapePointer = point;
+        if (ev.ctrlKey || ev.metaKey) {
+          if (shapeAnchor) {
+            shapeLast = shapeAnchor;
+            strokeShape(point);
+          } else {
+            stampShape(point.x, point.y);
+          }
+          shapeAnchor = point;
+          shapeLast = null;
+          shapeGuide = point;
+          redrawShapeCanvas();
+          persistSession();
+          return;
+        }
+        shapeGuide = null;
         shapePainting = true;
-        canvas.setPointerCapture(ev.pointerId);
+        board.setPointerCapture(ev.pointerId);
         shapeLast = null;
-        strokeShape(shapePoint(ev));
+        strokeShape(point);
         redrawShapeCanvas();
       });
-      canvas.addEventListener('pointermove', (ev) => {
-        if (!shapePainting) return;
-        strokeShape(shapePoint(ev));
-        redrawShapeCanvas();
+      board.addEventListener('pointermove', (ev) => {
+        if (!shapeState) return;
+        const point = shapePoint(ev);
+        shapePointer = point;
+        if (shapePainting) {
+          strokeShape(point);
+          redrawShapeCanvas();
+          return;
+        }
+        if ((ev.ctrlKey || ev.metaKey) && shapeAnchor) {
+          shapeGuide = point;
+          redrawShapeCanvas();
+        } else if (shapeGuide) {
+          shapeGuide = null;
+          redrawShapeCanvas();
+        }
       });
       const endStroke = () => {
         if (!shapePainting) return;
         shapePainting = false;
+        shapeAnchor = shapeLast;
         shapeLast = null;
         persistSession();
       };
-      canvas.addEventListener('pointerup', endStroke);
-      canvas.addEventListener('pointercancel', endStroke);
-      canvas.addEventListener('contextmenu', (ev) => ev.preventDefault());
+      board.addEventListener('pointerup', endStroke);
+      board.addEventListener('pointercancel', endStroke);
+      board.addEventListener('pointerleave', () => {
+        if (shapePainting) return;
+        shapePointer = null;
+        if (!shapeGuide) return;
+        shapeGuide = null;
+        redrawShapeCanvas();
+      });
+      board.addEventListener('contextmenu', (ev) => ev.preventDefault());
+      document.addEventListener('keyup', (ev) => {
+        if (ev.key !== 'Control' && ev.key !== 'Meta') return;
+        if (!shapeGuide) return;
+        shapeGuide = null;
+        if (shapeState) redrawShapeCanvas();
+      });
       document.addEventListener('keydown', (ev) => {
         const overlay = document.getElementById('shapeOverlay');
-        if (!overlay || overlay.hidden || ev.key !== 'Escape') return;
-        ev.preventDefault();
-        if (!document.getElementById('shapeDropAsk').hidden) cancelDropShapes();
-        else saveShapes();
+        if (!overlay || overlay.hidden) return;
+        if ((ev.key === 'Control' || ev.key === 'Meta') && shapeAnchor && shapePointer && !shapePainting) {
+          shapeGuide = shapePointer;
+          redrawShapeCanvas();
+        }
+        if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+        if (!document.getElementById('shapeDropAsk').hidden) {
+          if (ev.key === 'Escape') {
+            ev.preventDefault();
+            cancelDropShapes();
+          }
+          return;
+        }
+        const key = ev.key.toLowerCase();
+        if (ev.key === 'Escape') {
+          ev.preventDefault();
+          saveShapes();
+        } else if (key === 'p' || key === 'h' || key === 's') {
+          ev.preventDefault();
+          shapeState.tool = key === 'p' ? 'pencil' : (key === 'h' ? 'hard' : 'soft');
+          syncShapeControls();
+          if (shapeState.showBrush) flashBrushSize();
+        } else if (key === 'e') {
+          ev.preventDefault();
+          shapeState.erase = !shapeState.erase;
+          syncShapeControls();
+        } else if (key === 'v') {
+          ev.preventDefault();
+          cycleShapeView();
+        } else if (key === 'i') {
+          ev.preventDefault();
+          invertShapeLayer();
+        } else if (key === 'c') {
+          ev.preventDefault();
+          clearShapeLayer();
+        } else if (ev.key === '[') {
+          ev.preventDefault();
+          nudgeShapeSize(-1);
+        } else if (ev.key === ']') {
+          ev.preventDefault();
+          nudgeShapeSize(1);
+        }
       });
       syncShapeButton();
     }

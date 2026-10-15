@@ -3005,6 +3005,15 @@ std::string build_sdcpp_image_metadata_json(const SDContextParams& ctx_params,
     if (!gen_params.nag_prompt.empty()) {
         root["prompt"]["nag"] = gen_params.nag_prompt;
     }
+    if (!gen_params.shape_masks_json.empty()) {
+        try {
+            json parsed_masks = json::parse(gen_params.shape_masks_json);
+            if (parsed_masks.is_array()) {
+                root["shape_masks"] = std::move(parsed_masks);
+            }
+        } catch (const std::exception&) {
+        }
+    }
     if (!gen_params.ad_model_path.empty()) {
         root["adetailer"] = {
             {"model", sd_basename(gen_params.ad_model_path)},
