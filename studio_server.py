@@ -92,6 +92,7 @@ def enqueue_thumb(png: Path) -> None:
 
 
 def scan_outputs() -> list[dict]:
+    prune_orphan_thumbs()
     entries: list[tuple[float, str]] = []
     if OUTPUT_DIR.is_dir():
         for path in OUTPUT_DIR.iterdir():
@@ -126,7 +127,7 @@ def scan_outputs() -> list[dict]:
     return files
 
 
-def prune_orphan_thumbs() -> int:
+def prune_orphan_thumbs(remove_tmp: bool = False) -> int:
     if not THUMB_DIR.is_dir():
         return 0
     live: set[str] = set()
@@ -139,7 +140,11 @@ def prune_orphan_thumbs() -> int:
         if not path.is_file():
             continue
         name = path.name
-        orphan = name.endswith(".jpg.tmp") or (jpg_name_ok(name) and path.stem not in live)
+        # A .jpg.tmp is the thumb writer's open file. Only drop those at process start.
+        if name.endswith(".jpg.tmp"):
+            orphan = remove_tmp
+        else:
+            orphan = jpg_name_ok(name) and path.stem not in live
         if not orphan:
             continue
         try:
@@ -147,6 +152,8 @@ def prune_orphan_thumbs() -> int:
             removed += 1
         except OSError as exc:
             print(f"thumb prune failed {name}: {exc}", file=sys.stderr)
+    if removed:
+        print(f"removed {removed} old thumbs", flush=True)
     return removed
 
 
@@ -470,9 +477,7 @@ def main() -> int:
     args = parser.parse_args()
 
     THUMB_DIR.mkdir(parents=True, exist_ok=True)
-    removed = prune_orphan_thumbs()
-    if removed:
-        print(f"removed {removed} old thumbs", flush=True)
+    prune_orphan_thumbs(remove_tmp=True)
     worker = threading.Thread(target=thumb_worker, name="thumbs", daemon=True)
     worker.start()
     scan_outputs()
