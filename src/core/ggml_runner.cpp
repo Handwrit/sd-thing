@@ -51,7 +51,9 @@ void GGMLRunner::free_params_ctx() {
 
 void GGMLRunner::alloc_compute_ctx() {
     ggml_init_params params;
-    params.mem_size   = static_cast<size_t>(ggml_tensor_overhead() * MAX_GRAPH_SIZE + ggml_graph_overhead());
+    const size_t tensor_slots = graph_grads_enabled ? static_cast<size_t>(MAX_GRAPH_SIZE) * 2 : static_cast<size_t>(MAX_GRAPH_SIZE);
+    const size_t graph_bytes  = graph_grads_enabled ? ggml_graph_overhead_custom(262144, true) : ggml_graph_overhead();
+    params.mem_size           = ggml_tensor_overhead() * tensor_slots + graph_bytes;
     params.mem_buffer = nullptr;
     params.no_alloc   = true;
 
@@ -140,7 +142,7 @@ ggml_cgraph* GGMLRunner::new_graph_custom(size_t graph_size) {
     if (weight_adapter) {
         graph_size += weight_adapter->get_extra_graph_size();
     }
-    return ggml_new_graph_custom(compute_ctx, graph_size, false);
+    return ggml_new_graph_custom(compute_ctx, graph_size, graph_grads_enabled);
 }
 
 ggml_cgraph* GGMLRunner::get_compute_graph(get_graph_cb_t get_graph) {
@@ -819,8 +821,16 @@ std::optional<Tensor<float>> GGMLRunner::execute_graph(ggml_cgraph* graph, int n
     if (full_measurement.buffers.empty()) {
         return std::nullopt;
     }
-    auto manager         = residency_manager.lock();
-    const bool segmented = !is_multi_device() && !sd_backend_is_cpu(runtime_backend) &&
+    auto manager = residency_manager.lock();
+    bool defines_loss = false;
+    for (int node_index = 0; node_index < ggml_graph_n_nodes(graph); ++node_index) {
+        ggml_tensor* node = ggml_graph_node(graph, node_index);
+        if (node != nullptr && (node->flags & GGML_TENSOR_FLAG_LOSS) != 0) {
+            defines_loss = true;
+            break;
+        }
+    }
+    const bool segmented = !graph_grads_enabled && !defines_loss && !is_multi_device() && !sd_backend_is_cpu(runtime_backend) &&
                            manager != nullptr && manager->segmented_compute_enabled() &&
                            cached_plan.valid && cached_plan.has_cuts && cached_plan.segments.size() > 1 &&
                            !fits(memory_requests(full_measurement.buffers, cache_.pending_bytes(graph)), params);
@@ -938,6 +948,9 @@ std::optional<Tensor<float>> GGMLRunner::execute_graph(ggml_cgraph* graph, int n
             return fail_segment("allocated capacity check");
         }
         copy_data_to_backend_tensor(segment_graph, false);
+        if (defines_loss) {
+            ggml_graph_reset(segment_graph);
+        }
         auto prefetch_requests = memory_requests(measurement.buffers, new_cache_bytes);
         if (!prefetch_requests.empty()) {
             weights.enqueue_next(index, prefetch_requests.front());

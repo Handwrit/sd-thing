@@ -13,6 +13,7 @@
 
 #include "core/ggml_extend.h"
 #include "core/ggml_runner.h"
+#include "core/grad_safe.h"
 #include "model.h"
 
 class GGMLBlock {
@@ -205,7 +206,7 @@ public:
     }
 
     ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x) override {
-        ggml_tensor* w            = params["weight"];
+        ggml_tensor* w            = sd::cast_weight_f32(ctx->ggml_ctx, params["weight"]);
         const float scale         = ctx->linear_scale > 0.f ? ctx->linear_scale : this->scale;
         ggml_tensor* weight_scale = has_weight_scale ? params["weight_scale"] : nullptr;
 #ifndef SD_USE_UPSTREAM_GGML
@@ -294,7 +295,7 @@ public:
                 }
             }
             if (b != nullptr) {
-                out = ggml_add_inplace(ctx->ggml_ctx, out, b);
+                out = sd::maybe_add(ctx->ggml_ctx, out, b);
             }
             return out;
         }
@@ -561,7 +562,7 @@ public:
     }
 
     ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x) override {
-        ggml_tensor* w = params["weight"];
+        ggml_tensor* w = sd::cast_weight_f32(ctx->ggml_ctx, params["weight"]);
         ggml_tensor* b = nullptr;
         if (bias) {
             b = params["bias"];
@@ -608,7 +609,7 @@ public:
             }
             if (b) {
                 b   = ggml_reshape_4d(ctx->ggml_ctx, b, 1, 1, b->ne[0], 1);
-                res = ggml_add_inplace(ctx->ggml_ctx, res, b);
+                res = sd::maybe_add(ctx->ggml_ctx, res, b);
             }
             return res;
         }
@@ -782,6 +783,9 @@ public:
                 }
             }
         }
+        if (sd::differentiable_ops_enabled()) {
+            return sd::differentiable_layer_norm(ctx->ggml_ctx, x, w, b, eps, ctx->set_backend_tensor_data);
+        }
         return ggml_ext_layer_norm(ctx->ggml_ctx, x, w, b, eps);
     }
 };
@@ -825,6 +829,9 @@ public:
                 b = ctx->weight_adapter->patch_weight(ctx->ggml_ctx, ctx->backend, b, prefix + "bias");
             }
         }
+        if (sd::differentiable_ops_enabled()) {
+            return sd::differentiable_group_norm(ctx->ggml_ctx, x, w, b, num_groups, eps, ctx->set_backend_tensor_data);
+        }
         return ggml_ext_group_norm(ctx->ggml_ctx, x, w, b, num_groups, eps);
     }
 };
@@ -859,7 +866,7 @@ public:
             w = ctx->weight_adapter->patch_weight(ctx->ggml_ctx, ctx->backend, w, prefix + "weight");
         }
         x = ggml_rms_norm(ctx->ggml_ctx, x, eps);
-        x = ggml_mul_inplace(ctx->ggml_ctx, x, w);
+        x = sd::maybe_mul(ctx->ggml_ctx, x, w);
         return x;
     }
 };

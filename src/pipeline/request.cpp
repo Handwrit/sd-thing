@@ -512,6 +512,47 @@ namespace sd::pipeline {
 
         eta = resolve_eta(sd, eta, sample_method);
 
+        if (high_noise_sample_steps == 0) {
+            int start_step = 1;
+            int end_step   = 0;
+            bool have_end  = false;
+            for (const auto& [key, value] : parse_key_value_args(sample_params->extra_sample_args, "schedule window")) {
+                if (key != "schedule_start" && key != "schedule_end") {
+                    continue;
+                }
+                int parsed = 0;
+                if (!parse_strict_int(value, parsed) || parsed < 1) {
+                    LOG_WARN("ignoring invalid %s '%s'", key.c_str(), value.c_str());
+                    continue;
+                }
+                if (key == "schedule_start") {
+                    start_step = parsed;
+                } else {
+                    end_step = parsed;
+                    have_end = true;
+                }
+            }
+            const int marks = static_cast<int>(sigmas.size());
+            const int steps = marks - 1;
+            if (steps > 0) {
+                if (!have_end) {
+                    end_step = steps;
+                }
+                if (end_step > steps) {
+                    end_step = steps;
+                }
+                if (start_step > end_step) {
+                    start_step = end_step;
+                }
+                if (start_step != 1 || end_step != steps) {
+                    sigmas       = std::vector<float>(sigmas.begin() + (start_step - 1), sigmas.begin() + (end_step + 1));
+                    sample_steps = static_cast<int>(sigmas.size()) - 1;
+                    total_steps  = sample_steps;
+                    LOG_INFO("schedule window steps %d through %d (%d left)", start_step, end_step, sample_steps);
+                }
+            }
+        }
+
         if (high_noise_sample_steps < 0) {
             for (size_t i = 0; i < sigmas.size(); ++i) {
                 if (sigmas[i] < moe_boundary) {

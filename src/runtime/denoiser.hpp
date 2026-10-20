@@ -15,6 +15,7 @@
 #include "core/rng_mt19937.hpp"
 #include "core/rng_philox.hpp"
 #include "core/tensor.hpp"
+#include "runtime/latent_tree.hpp"
 #include "core/util.h"
 #include "model.h"
 #include "runtime/gits_noise.h"
@@ -1745,13 +1746,41 @@ public:
     virtual ~NoiseSampler()                                                  = default;
 };
 
+// rng_before is the stream before this step's ancestral draw.
+// The clone taken after the draw is the stream the next step resumes.
+static void latent_tree_emit(sd::tree::LatentTreeHooks* hooks,
+                             const sd::Tensor<float>& clean,
+                             const sd::Tensor<float>& x_before,
+                             const sd::Tensor<float>& x_after,
+                             float sigma_in,
+                             float sigma_to,
+                             int step) {
+    if (hooks == nullptr || !hooks->on_step) {
+        return;
+    }
+    sd::tree::LatentStepRecord rec;
+    rec.clean      = clean;
+    rec.x_before   = x_before;
+    rec.x_after    = x_after;
+    rec.sigma_in   = sigma_in;
+    rec.sigma      = sigma_to;
+    rec.step       = step;
+    rec.rng_before = hooks->rng_before;
+    if (hooks->rng) {
+        rec.rng_after = hooks->rng->clone();
+    }
+    hooks->on_step(std::move(rec));
+}
+
 static sd::Tensor<float> sample_euler_ancestral(denoise_cb_t model,
                                                 sd::Tensor<float> x,
                                                 const std::vector<float>& sigmas,
                                                 NoiseSampler& noise_sampler,
                                                 bool is_flow_denoiser = false,
-                                                float eta             = 0.f) {
-    int steps = static_cast<int>(sigmas.size()) - 1;
+                                                float eta             = 0.f,
+                                                sd::tree::LatentTreeHooks* hooks = nullptr) {
+    const float sigma_ref = hooks != nullptr && hooks->sigma_ref > 0.f ? hooks->sigma_ref : (sigmas.empty() ? 1.f : sigmas.front());
+    int steps             = static_cast<int>(sigmas.size()) - 1;
     for (int i = 0; i < steps; i++) {
         float sigma       = sigmas[i];
         float sigma_to    = sigmas[i + 1];
@@ -1760,11 +1789,20 @@ static sd::Tensor<float> sample_euler_ancestral(denoise_cb_t model,
             return {};
         }
         sd::Tensor<float> denoised = std::move(denoised_opt.pred);
+        if (hooks != nullptr && hooks->dcw_amount != 0.f) {
+            denoised = sd::tree::apply_haar_dcw(denoised, sigma, sigma_ref, hooks->dcw_amount);
+        }
+        if (hooks != nullptr && hooks->rng) {
+            hooks->rng_before = hooks->rng->clone();
+        }
+        sd::Tensor<float> x_before;
         if (sigma_to == 0.f) {
-            x = denoised;
+            x        = denoised;
+            x_before = x;
         } else if (eta == 0.f) {
             float sigma_ratio = sigma_to / sigma;
             x                 = sigma_ratio * x + (1.0 - sigma_ratio) * denoised;
+            x_before          = x;
         } else {
             auto [sigma_down, sigma_up, alpha_scale] = get_ancestral_step(sigma, sigma_to, eta, is_flow_denoiser);
             float sigma_ratio                        = sigma_down / sigma;
@@ -1773,9 +1811,13 @@ static sd::Tensor<float> sample_euler_ancestral(denoise_cb_t model,
                 if (is_flow_denoiser) {
                     x *= alpha_scale;
                 }
+                x_before = x;
                 x += noise_sampler(sigma, sigma_to) * sigma_up;
+            } else {
+                x_before = x;
             }
         }
+        latent_tree_emit(hooks, denoised, x_before, x, sigma, sigma_to, i + 1);
     }
     return x;
 }
@@ -1816,8 +1858,10 @@ static sd::Tensor<float> sample_sefi_euler(SefiFlowDenoiser* sefi,
 
 static sd::Tensor<float> sample_euler(denoise_cb_t model,
                                       sd::Tensor<float> x,
-                                      const std::vector<float>& sigmas) {
-    int steps = static_cast<int>(sigmas.size()) - 1;
+                                      const std::vector<float>& sigmas,
+                                      sd::tree::LatentTreeHooks* hooks = nullptr) {
+    const float sigma_ref = hooks != nullptr && hooks->sigma_ref > 0.f ? hooks->sigma_ref : (sigmas.empty() ? 1.f : sigmas.front());
+    int steps             = static_cast<int>(sigmas.size()) - 1;
     for (int i = 0; i < steps; i++) {
         float sigma       = sigmas[i];
         auto denoised_opt = model(x, sigma, i + 1);
@@ -1825,8 +1869,15 @@ static sd::Tensor<float> sample_euler(denoise_cb_t model,
             return {};
         }
         sd::Tensor<float> denoised = std::move(denoised_opt.pred);
-        sd::Tensor<float> d        = (x - denoised) / sigma;
+        if (hooks != nullptr && hooks->dcw_amount != 0.f) {
+            denoised = sd::tree::apply_haar_dcw(denoised, sigma, sigma_ref, hooks->dcw_amount);
+        }
+        if (hooks != nullptr && hooks->rng) {
+            hooks->rng_before = hooks->rng->clone();
+        }
+        sd::Tensor<float> d = (x - denoised) / sigma;
         x += d * (sigmas[i + 1] - sigma);
+        latent_tree_emit(hooks, denoised, x, x, sigma, sigmas[i + 1], i + 1);
     }
     return x;
 }
@@ -3049,7 +3100,8 @@ static sd::Tensor<float> sample_k_diffusion(sample_method_t method,
                                             float eta,
                                             bool is_flow_denoiser,
                                             const char* extra_sample_args,
-                                            std::shared_ptr<Denoiser> denoiser_for_dispatch = nullptr) {
+                                            std::shared_ptr<Denoiser> denoiser_for_dispatch = nullptr,
+                                            sd::tree::LatentTreeHooks* latent_tree         = nullptr) {
     if (denoiser_for_dispatch) {
         if (auto sefi = std::dynamic_pointer_cast<SefiFlowDenoiser>(denoiser_for_dispatch)) {
             return sample_sefi_euler(sefi.get(), model, std::move(x));
@@ -3061,9 +3113,9 @@ static sd::Tensor<float> sample_k_diffusion(sample_method_t method,
 
     switch (method) {
         case EULER_A_SAMPLE_METHOD:
-            return sample_euler_ancestral(model, std::move(x), sigmas, *noise_sampler, is_flow_denoiser, eta);
+            return sample_euler_ancestral(model, std::move(x), sigmas, *noise_sampler, is_flow_denoiser, eta, latent_tree);
         case EULER_SAMPLE_METHOD:
-            return sample_euler(model, std::move(x), sigmas);
+            return sample_euler(model, std::move(x), sigmas, latent_tree);
         case HEUN_SAMPLE_METHOD:
             return sample_heun(model, std::move(x), sigmas);
         case DPM2_SAMPLE_METHOD:

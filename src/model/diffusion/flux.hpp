@@ -210,7 +210,7 @@ namespace Flux {
             auto out_layer = std::dynamic_pointer_cast<Linear>(blocks["out_layer"]);
 
             x = in_layer->forward(ctx, x);
-            x = ggml_silu_inplace(ctx->ggml_ctx, x);
+            x = sd::maybe_silu(ctx->ggml_ctx, x);
             x = out_layer->forward(ctx, x);
             return x;
         }
@@ -360,7 +360,7 @@ namespace Flux {
             auto down_proj = std::dynamic_pointer_cast<Linear>(blocks["down_proj"]);
 
             auto gate = gate_proj->forward(ctx, x);
-            gate      = ggml_silu_inplace(ctx->ggml_ctx, gate);
+            gate      = sd::maybe_silu(ctx->ggml_ctx, gate);
             x         = up_proj->forward(ctx, x);
             x         = ggml_mul(ctx->ggml_ctx, x, gate);
             x         = down_proj->forward(ctx, x);
@@ -988,7 +988,7 @@ namespace Flux {
             for (int i = 0; i < n_layers; i++) {
                 auto norm  = std::dynamic_pointer_cast<RMSNorm>(blocks["norms." + std::to_string(i)]);
                 auto embed = std::dynamic_pointer_cast<MLPEmbedder>(blocks["layers." + std::to_string(i)]);
-                x          = ggml_add_inplace(ctx->ggml_ctx, x, embed->forward(ctx, norm->forward(ctx, x)));
+                x          = sd::maybe_add(ctx->ggml_ctx, x, embed->forward(ctx, norm->forward(ctx, x)));
             }
             x = out_proj->forward(ctx, x);
 
@@ -1059,15 +1059,15 @@ namespace Flux {
             x          = norm->forward(ctx, x);  // [batch_size, n_token, hidden_size_x]
 
             auto x1 = ggml_mul_mat(ctx->ggml_ctx, fc1_gate, x);  // [batch_size, n_token, hidden_size_x*mlp_ratio]
-            x1      = ggml_silu_inplace(ctx->ggml_ctx, x1);
+            x1      = sd::maybe_silu(ctx->ggml_ctx, x1);
 
             auto x2 = ggml_mul_mat(ctx->ggml_ctx, fc1_value, x);  // [batch_size, n_token, hidden_size_x*mlp_ratio]
 
-            x = ggml_mul_inplace(ctx->ggml_ctx, x1, x2);  // [batch_size, n_token, hidden_size_x*mlp_ratio]
+            x = sd::maybe_mul(ctx->ggml_ctx, x1, x2);  // [batch_size, n_token, hidden_size_x*mlp_ratio]
 
             x = ggml_mul_mat(ctx->ggml_ctx, fc2, x);  // [batch_size, n_token, hidden_size_x]
 
-            x = ggml_add_inplace(ctx->ggml_ctx, x, res_x);
+            x = sd::maybe_add(ctx->ggml_ctx, x, res_x);
 
             return x;
         }
@@ -1908,6 +1908,10 @@ namespace Flux {
                                  float nag_alpha                                          = 0.25f,
                                  const std::vector<ShapeTokenMask>* shape_token_masks     = nullptr) {
             ggml_tensor* x         = make_input(x_tensor);
+            if (graph_grads_enabled) {
+                ggml_set_name(x, "dno_x");
+                ggml_set_param(x);
+            }
             ggml_tensor* timesteps = make_input(timesteps_tensor);
             ggml_tensor* context   = make_optional_input(context_tensor);
             ggml_tensor* c_concat  = make_optional_input(c_concat_tensor);
@@ -1934,6 +1938,9 @@ namespace Flux {
             size_t graph_size        = use_nag ? static_cast<size_t>(FLUX_GRAPH_SIZE) * 4 : FLUX_GRAPH_SIZE;
             if (use_shapes) {
                 graph_size *= 2;
+            }
+            if (graph_grads_enabled) {
+                graph_size *= 8;
             }
             ggml_cgraph* gf = new_graph_custom(graph_size);
 
@@ -2037,6 +2044,9 @@ namespace Flux {
                                             nag_alpha,
                                             shape_mask);
 
+            if (graph_grads_enabled) {
+                ggml_set_name(out, "dno_pred");
+            }
             ggml_build_forward_expand(gf, out);
 
             return gf;

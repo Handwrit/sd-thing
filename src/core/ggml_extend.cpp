@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "core/ggml_extend_backend.h"
+#include "core/grad_safe.h"
 
 ggml_tensor* ggml_ext_mul_n_mode(ggml_context* ctx, ggml_tensor* a, ggml_tensor* b, int mode) {
     // reshape A
@@ -145,7 +146,7 @@ ggml_tensor* ggml_ext_silu_act(ggml_context* ctx, ggml_tensor* x, bool gate_firs
         gate = x_vec[1];
     }
     gate = ggml_cont(ctx, gate);
-    gate = ggml_silu_inplace(ctx, gate);
+    gate = sd::maybe_silu(ctx, gate);
 
     x = ggml_mul(ctx, x, gate);  // [ne3, ne2, ne1, ne0/2]
 
@@ -172,7 +173,7 @@ ggml_tensor* ggml_ext_scale(ggml_context* ctx,
         x = ggml_cont(ctx, x);
     }
     if (inplace) {
-        x = ggml_scale_inplace(ctx, x, factor);
+        x = sd::maybe_scale(ctx, x, factor);
     } else {
         x = ggml_scale(ctx, x, factor);
     }
@@ -186,7 +187,7 @@ ggml_tensor* ggml_ext_gelu(ggml_context* ctx,
         x = ggml_cont(ctx, x);
     }
     if (inplace) {
-        x = ggml_gelu_inplace(ctx, x);
+        x = sd::maybe_gelu(ctx, x);
     } else {
         x = ggml_gelu(ctx, x);
     }
@@ -200,7 +201,7 @@ ggml_tensor* ggml_ext_gelu_quick(ggml_context* ctx,
         x = ggml_cont(ctx, x);
     }
     if (inplace) {
-        x = ggml_gelu_quick_inplace(ctx, x);
+        x = sd::maybe_gelu_quick(ctx, x);
     } else {
         x = ggml_gelu_quick(ctx, x);
     }
@@ -213,6 +214,7 @@ ggml_tensor* ggml_ext_linear(ggml_context* ctx,
                              ggml_tensor* b,
                              bool force_prec_f32,
                              float scale) {
+    w = sd::cast_weight_f32(ctx, w);
     if (scale != 1.f) {
         x = ggml_ext_scale(ctx, x, scale);
     }
@@ -236,7 +238,7 @@ ggml_tensor* ggml_ext_linear(ggml_context* ctx,
         x = ggml_ext_scale(ctx, x, 1.f / scale);
     }
     if (b != nullptr) {
-        x = ggml_add_inplace(ctx, x, b);
+        x = sd::maybe_add(ctx, x, b);
     }
     return x;
 }
@@ -268,7 +270,7 @@ ggml_tensor* ggml_ext_linear_i8_tensorwise(ggml_context* ctx,
     if (scale != 1.f) {
         x = ggml_ext_scale(ctx, x, 1.f / scale);
         if (b != nullptr) {
-            x = ggml_add_inplace(ctx, x, b);
+            x = sd::maybe_add(ctx, x, b);
         }
     }
     return x;
@@ -402,7 +404,7 @@ ggml_tensor* ggml_ext_conv_1d(ggml_context* ctx,
             b = ggml_cont(ctx, b);
         }
         b      = ggml_reshape_3d(ctx, b, 1, w->ne[2], 1);
-        result = ggml_add_inplace(ctx, result, b);
+        result = sd::maybe_add(ctx, result, b);
     }
     return result;
 }
@@ -434,6 +436,7 @@ ggml_tensor* ggml_ext_conv_2d(ggml_context* ctx,
         p1 = 0;
     }
 
+    w = sd::cast_weight_f32(ctx, w);
     if (direct) {
         x = ggml_conv_2d_direct(ctx, w, x, s0, s1, p0, p1, d0, d1);
     } else {
@@ -444,7 +447,7 @@ ggml_tensor* ggml_ext_conv_2d(ggml_context* ctx,
     }
     if (b != nullptr) {
         b = ggml_reshape_4d(ctx, b, 1, 1, b->ne[0], 1);
-        x = ggml_add_inplace(ctx, x, b);
+        x = sd::maybe_add(ctx, x, b);
     }
     return x;
 }
@@ -504,7 +507,7 @@ ggml_tensor* ggml_ext_conv_3d(ggml_context* ctx,
 
     if (b != nullptr) {
         b = ggml_reshape_4d(ctx, b, 1, 1, 1, b->ne[0]);  // [OC, 1, 1, 1]
-        x = ggml_add_inplace(ctx, x, b);
+        x = sd::maybe_add(ctx, x, b);
     }
     return x;
 }
@@ -623,6 +626,9 @@ ggml_tensor* ggml_ext_attention_ext(ggml_context* ctx,
                                     bool skip_reshape,
                                     bool flash_attn,
                                     float kv_scale) {  // avoid overflow
+    if (sd::differentiable_ops_enabled()) {
+        flash_attn = false;
+    }
     int64_t L_q;
     int64_t L_k;
     int64_t C;
@@ -747,11 +753,11 @@ ggml_tensor* ggml_ext_attention_ext(ggml_context* ctx,
 
         auto kq = ggml_mul_mat(ctx, k, q);  // [N * n_head, L_q, L_k]
         ggml_mul_mat_set_prec(kq, GGML_PREC_F32);
-        kq = ggml_scale_inplace(ctx, kq, scale);
+        kq = sd::maybe_scale(ctx, kq, scale);
         if (mask) {
-            kq = ggml_add_inplace(ctx, kq, mask);
+            kq = sd::maybe_add(ctx, kq, mask);
         }
-        kq = ggml_soft_max_inplace(ctx, kq);
+        kq = sd::maybe_softmax(ctx, kq);
 
         kqv = ggml_mul_mat(ctx, v, kq);  // [N * n_head, L_q, d_head]
 
@@ -772,9 +778,9 @@ ggml_tensor* ggml_ext_layer_norm(ggml_context* ctx,
                                  float eps) {
     x = ggml_norm(ctx, x, eps);
     if (w != nullptr) {
-        x = ggml_mul_inplace(ctx, x, w);
+        x = sd::maybe_mul(ctx, x, w);
         if (b != nullptr) {
-            x = ggml_add_inplace(ctx, x, b);
+            x = sd::maybe_add(ctx, x, b);
         }
     }
     return x;
@@ -793,8 +799,8 @@ ggml_tensor* ggml_ext_group_norm(ggml_context* ctx,
 
     x = ggml_group_norm(ctx, x, num_groups, eps);
     if (w != nullptr && b != nullptr) {
-        x = ggml_mul_inplace(ctx, x, w);
-        x = ggml_add_inplace(ctx, x, b);
+        x = sd::maybe_mul(ctx, x, w);
+        x = sd::maybe_add(ctx, x, b);
     }
     return x;
 }

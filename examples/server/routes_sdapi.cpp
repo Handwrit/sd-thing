@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <fstream>
 #include <regex>
 #include <string_view>
 #include <unordered_map>
@@ -168,6 +169,9 @@ static bool build_sdapi_img_gen_request(const json& j,
     enum scheduler_t scheduler = str_to_scheduler(scheduler_name.c_str());
     if (scheduler != SCHEDULER_COUNT) {
         request.gen_params.sample_params.scheduler = scheduler;
+    }
+    if (j.contains("eta") && j["eta"].is_number()) {
+        request.gen_params.sample_params.eta = j["eta"].get<float>();
     }
     if (j.contains("extra_sample_args") && j["extra_sample_args"].is_string()) {
         request.gen_params.extra_sample_args = j["extra_sample_args"].get<std::string>();
@@ -822,6 +826,276 @@ void register_sdapi_endpoints(httplib::Server& svr, ServerRuntime& rt) {
         }
         res.status = 200;
         res.set_content(make_job_view(job, 0).dump(), "application/json");
+    });
+
+    auto latent_tree_busy = [runtime]() {
+        if (runtime->generation_status == nullptr) {
+            return false;
+        }
+        std::lock_guard<std::mutex> lock(runtime->generation_status->mutex);
+        return runtime->generation_status->busy;
+    };
+
+    svr.Get("/sdapi/v1/latent-tree", [runtime](const httplib::Request&, httplib::Response& res) {
+        char* json = sd_latent_tree_state_json(runtime->sd_ctx);
+        if (json == nullptr) {
+            res.status = 500;
+            res.set_content(R"({"error":"out of memory"})", "application/json");
+            return;
+        }
+        res.set_header("Cache-Control", "no-store");
+        res.set_content(json, "application/json");
+        sd_latent_tree_free(json);
+    });
+
+    svr.Get("/sdapi/v1/latent-tree/card", [runtime](const httplib::Request& req, httplib::Response& res) {
+        int card = 0;
+        try {
+            card = std::stoi(req.get_param_value("card"));
+        } catch (const std::exception&) {
+            card = 0;
+        }
+        const bool clean = req.get_param_value("view") == "clean";
+        uint8_t* rgb     = nullptr;
+        int width = 0, height = 0, channels = 0;
+        if (runtime->sd_ctx == nullptr ||
+            !sd_latent_tree_card_rgb(runtime->sd_ctx, card, clean ? 1 : 0, &rgb, &width, &height, &channels)) {
+            res.status = 404;
+            res.set_content(R"({"error":"card not found"})", "application/json");
+            return;
+        }
+        auto png = encode_image_to_vector(EncodedImageFormat::PNG, rgb, width, height, channels, "", 100);
+        sd_latent_tree_free(rgb);
+        if (png.empty()) {
+            res.status = 500;
+            res.set_content(R"({"error":"preview encode failed"})", "application/json");
+            return;
+        }
+        res.set_header("Cache-Control", "no-store");
+        res.set_content(std::string(png.begin(), png.end()), "image/png");
+    });
+
+    svr.Post("/sdapi/v1/latent-tree/close", [runtime](const httplib::Request&, httplib::Response& res) {
+        char error[256] = {};
+        if (!sd_latent_tree_close(runtime->sd_ctx, error, sizeof(error))) {
+            res.status = 409;
+            res.set_content(json({{"error", error}}).dump(), "application/json");
+            return;
+        }
+        res.set_content(R"({"ok":true})", "application/json");
+    });
+
+    svr.Post("/sdapi/v1/latent-tree/run", [runtime, latent_tree_busy](const httplib::Request& req, httplib::Response& res) {
+        struct Finish {
+            ServerRuntime* runtime = nullptr;
+            std::string status     = "failed";
+            std::string prompt;
+            bool armed = false;
+            ~Finish() {
+                if (armed && runtime != nullptr) {
+                    finish_generation(*runtime, "latent-tree", status, prompt, {});
+                }
+            }
+        } finish;
+        try {
+            if (req.body.empty()) {
+                res.status = 400;
+                res.set_content(R"({"error":"empty body"})", "application/json");
+                return;
+            }
+            if (latent_tree_busy()) {
+                res.status = 409;
+                res.set_content(R"({"error":"server is busy"})", "application/json");
+                return;
+            }
+            json body = json::parse(req.body);
+            ImgGenJobRequest request;
+            std::string error_message;
+            if (!build_sdapi_img_gen_request(body, *runtime, false, request, error_message)) {
+                res.status = 400;
+                res.set_content(json({{"error", error_message}}).dump(), "application/json");
+                return;
+            }
+            request.gen_params.batch_count    = 1;
+            request.gen_params.hires_enabled  = false;
+            const std::string op              = body.value("op", "root");
+            const int card                    = body.value("card", 0);
+            const bool reseed                 = body.value("reseed", false);
+            const std::string settings        = body.contains("settings") && body["settings"].is_object() ? body["settings"].dump() : "{}";
+            finish.runtime                    = runtime;
+            finish.prompt                     = request.gen_params.prompt;
+            finish.armed                      = true;
+            begin_generation(*runtime, "latent-tree", "latent-tree", request.gen_params, false);
+
+            char error[512] = {};
+            bool ok         = false;
+            {
+                std::lock_guard<std::mutex> lock(*runtime->sd_ctx_mutex);
+                sd_img_gen_params_t img = request.to_sd_img_gen_params_t();
+                ok                      = sd_latent_tree_run(runtime->sd_ctx, op.c_str(), card, reseed ? 1 : 0, &img, settings.c_str(), error, sizeof(error));
+            }
+            const bool cancelled = consume_generation_interrupt(*runtime);
+            if (cancelled) {
+                finish.status = "cancelled";
+                res.set_content(R"({"ok":true,"cancelled":true})", "application/json");
+                return;
+            }
+            if (!ok) {
+                finish.status = "failed";
+                res.status    = 500;
+                res.set_content(json({{"error", error[0] ? error : "Latent Tree failed"}}).dump(), "application/json");
+                return;
+            }
+            finish.status = "completed";
+            res.set_content(R"({"ok":true})", "application/json");
+        } catch (const json::parse_error&) {
+            res.status = 400;
+            res.set_content(R"({"error":"invalid json"})", "application/json");
+        } catch (const std::exception& e) {
+            res.status = 500;
+            res.set_content(json({{"error", e.what()}}).dump(), "application/json");
+        }
+    });
+
+    svr.Post("/sdapi/v1/latent-tree/bake", [runtime](const httplib::Request& req, httplib::Response& res) {
+        int card = 0;
+        try {
+            json body = req.body.empty() ? json::object() : json::parse(req.body);
+            card      = body.value("card", 0);
+        } catch (const json::parse_error&) {
+            res.status = 400;
+            res.set_content(R"({"error":"invalid json"})", "application/json");
+            return;
+        }
+        sd_image_t image{};
+        char error[256] = {};
+        bool ok         = false;
+        {
+            std::lock_guard<std::mutex> lock(*runtime->sd_ctx_mutex);
+            ok = sd_latent_tree_bake(runtime->sd_ctx, card, &image, error, sizeof(error));
+        }
+        if (!ok || image.data == nullptr) {
+            res.status = 500;
+            res.set_content(json({{"error", error[0] ? error : "Bake failed"}}).dump(), "application/json");
+            return;
+        }
+        const std::string metadata = "SDCPP: {\"latent_tree\":true}";
+        const std::string path     = save_generated_image(*runtime, image, metadata);
+        sd_latent_tree_free(image.data);
+        if (path.empty()) {
+            res.status = 500;
+            res.set_content(R"({"error":"could not write the bake"})", "application/json");
+            return;
+        }
+        res.set_content(json({{"ok", true}, {"file", fs::path(path).filename().u8string()}}).dump(), "application/json");
+    });
+
+    svr.Post("/sdapi/v1/latent-tree/paint/export", [runtime](const httplib::Request& req, httplib::Response& res) {
+        int card = 0;
+        try {
+            json body = req.body.empty() ? json::object() : json::parse(req.body);
+            card      = body.value("card", 0);
+        } catch (const json::parse_error&) {
+            res.status = 400;
+            res.set_content(R"({"error":"invalid json"})", "application/json");
+            return;
+        }
+        if (runtime->svr_params == nullptr || runtime->svr_params->output_dir.empty()) {
+            res.status = 500;
+            res.set_content(R"({"error":"no output folder"})", "application/json");
+            return;
+        }
+        uint8_t* data = nullptr;
+        size_t size   = 0;
+        char error[256] = {};
+        bool ok         = false;
+        {
+            std::lock_guard<std::mutex> lock(*runtime->sd_ctx_mutex);
+            ok = sd_latent_tree_paint_export(runtime->sd_ctx, card, &data, &size, error, sizeof(error));
+        }
+        if (!ok || data == nullptr) {
+            res.status = 500;
+            res.set_content(json({{"error", error[0] ? error : "Paint export failed"}}).dump(), "application/json");
+            return;
+        }
+        const fs::path dir = fs::path(runtime->svr_params->output_dir) / "latent-tree";
+        std::error_code ec;
+        fs::create_directories(dir, ec);
+        const std::string name = "card-" + std::to_string(card) + ".tif";
+        const fs::path file    = dir / name;
+        std::ofstream out(file, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(data), static_cast<std::streamsize>(size));
+        const bool wrote = out.good();
+        out.close();
+        sd_latent_tree_free(data);
+        if (!wrote) {
+            res.status = 500;
+            res.set_content(R"({"error":"could not write the TIFF"})", "application/json");
+            return;
+        }
+        res.set_content(json({{"ok", true}, {"file", std::string("latent-tree/") + name}}).dump(), "application/json");
+    });
+
+    svr.Post("/sdapi/v1/latent-tree/paint/import", [runtime](const httplib::Request& req, httplib::Response& res) {
+        int card = 0;
+        try {
+            card = std::stoi(req.get_param_value("card"));
+        } catch (const std::exception&) {
+            res.status = 400;
+            res.set_content(R"({"error":"card required"})", "application/json");
+            return;
+        }
+        if (req.body.empty()) {
+            res.status = 400;
+            res.set_content(R"({"error":"empty TIFF"})", "application/json");
+            return;
+        }
+        char error[256] = {};
+        bool ok         = false;
+        {
+            std::lock_guard<std::mutex> lock(*runtime->sd_ctx_mutex);
+            ok = sd_latent_tree_paint_import(runtime->sd_ctx,
+                                             card,
+                                             reinterpret_cast<const uint8_t*>(req.body.data()),
+                                             req.body.size(),
+                                             error,
+                                             sizeof(error));
+        }
+        if (!ok) {
+            res.status = 500;
+            res.set_content(json({{"error", error[0] ? error : "Paint import failed"}}).dump(), "application/json");
+            return;
+        }
+        res.set_content(R"({"ok":true})", "application/json");
+    });
+
+    svr.Post("/sdapi/v1/latent-tree/operate", [runtime](const httplib::Request& req, httplib::Response& res) {
+        int card = 0;
+        std::string op;
+        float amount = 0.f;
+        try {
+            json body = req.body.empty() ? json::object() : json::parse(req.body);
+            card      = body.value("card", 0);
+            op        = body.value("op", "");
+            amount    = body.value("amount", 0.f);
+        } catch (const json::parse_error&) {
+            res.status = 400;
+            res.set_content(R"({"error":"invalid json"})", "application/json");
+            return;
+        }
+        int child       = 0;
+        char error[256] = {};
+        bool ok         = false;
+        {
+            std::lock_guard<std::mutex> lock(*runtime->sd_ctx_mutex);
+            ok = sd_latent_tree_operate(runtime->sd_ctx, card, op.c_str(), amount, &child, error, sizeof(error));
+        }
+        if (!ok || child <= 0) {
+            res.status = 500;
+            res.set_content(json({{"error", error[0] ? error : "Operation failed"}}).dump(), "application/json");
+            return;
+        }
+        res.set_content(json({{"ok", true}, {"card", child}}).dump(), "application/json");
     });
 
     svr.Post("/sdapi/v1/interrupt", [runtime](const httplib::Request&, httplib::Response& res) {

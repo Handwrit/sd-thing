@@ -57,6 +57,15 @@ namespace sd::pipeline {
                         sd_image_t** images_out,
                         int* num_images_out);
 
+    bool run_latent_tree(StableDiffusionGGML* sd,
+                         const char* op,
+                         int card_id,
+                         bool reseed,
+                         const sd_img_gen_params_t* params,
+                         const char* settings_json,
+                         char* error,
+                         size_t error_size);
+
     bool generate_video(StableDiffusionGGML* sd,
                         const sd_vid_gen_params_t* sd_vid_gen_params,
                         sd_image_t** frames_out,

@@ -1228,4 +1228,282 @@ namespace sd::pipeline {
         return true;
     }
 
+    static void latent_tree_error(char* error, size_t error_size, const char* message) {
+        if (error != nullptr && error_size > 0 && message != nullptr) {
+            std::snprintf(error, error_size, "%s", message);
+        }
+        LOG_ERROR("latent tree: %s", message != nullptr ? message : "");
+    }
+
+    static std::vector<float> latent_tree_tip_sigmas(const std::vector<float>& full, int steps, float strength) {
+        if (steps < 1 || static_cast<int>(full.size()) < steps + 1) {
+            return {};
+        }
+        strength = std::min(1.f, std::max(0.01f, strength));
+        size_t t_enc = static_cast<size_t>(static_cast<float>(steps) * strength);
+        if (t_enc == static_cast<size_t>(steps)) {
+            t_enc--;
+        }
+        const size_t start = static_cast<size_t>(steps) - t_enc - 1;
+        if (start >= full.size() - 1) {
+            return {};
+        }
+        return std::vector<float>(full.begin() + static_cast<std::ptrdiff_t>(start), full.end());
+    }
+
+    static sd::Tensor<float> latent_tree_reseed(sd::Tensor<float> x_before,
+                                                float sigma_from,
+                                                float sigma_to,
+                                                float eta,
+                                                bool flow,
+                                                const std::shared_ptr<RNG>& rng) {
+        if (rng == nullptr || sigma_to <= 0.f || eta <= 0.f || sigma_from <= 0.f) {
+            return x_before;
+        }
+        auto [sigma_down, sigma_up, alpha_scale] = get_ancestral_step(sigma_from, sigma_to, eta, flow);
+        (void)sigma_down;
+        (void)alpha_scale;
+        if (sigma_up > 0.f) {
+            x_before += sd::Tensor<float>::randn(x_before.shape(), rng) * sigma_up;
+        }
+        return x_before;
+    }
+
+    static sd::Tensor<float> latent_tree_start(const sd::tree::CardCopy& card,
+                                               bool reseed,
+                                               bool flow,
+                                               const std::shared_ptr<RNG>& rng) {
+        if (!reseed) {
+            return card.x_after;
+        }
+        if (card.kind != "step") {
+            if (card.sigma <= 1e-6f || rng == nullptr) {
+                return card.clean.empty() ? card.x_after : card.clean;
+            }
+            sd::Tensor<float> noise = sd::Tensor<float>::randn(card.clean.shape(), rng);
+            return card.clean * (1.f - card.sigma) + noise * card.sigma;
+        }
+        if (!card.ancestral) {
+            return card.x_after;
+        }
+        return latent_tree_reseed(card.x_before, card.sigma_in, card.sigma, card.eta, flow, rng);
+    }
+
+    bool run_latent_tree(StableDiffusionGGML* sd,
+                         const char* op_text,
+                         int card_id,
+                         bool reseed,
+                         const sd_img_gen_params_t* params,
+                         const char* settings_json,
+                         char* error,
+                         size_t error_size) {
+        auto fail = [&](const char* message) {
+            latent_tree_error(error, error_size, message);
+            return false;
+        };
+        if (sd == nullptr || params == nullptr) {
+            return fail("Latent Tree is missing a context");
+        }
+        if (sd->version != VERSION_FLUX2) {
+            return fail("Latent Tree is Flux 2 only");
+        }
+        const std::string op = op_text != nullptr ? op_text : "root";
+        const bool planting  = op == "root";
+        const bool tip       = op == "tip";
+        const bool rerun     = op == "rerun";
+        const bool rebuild   = op == "reschedule";
+        const bool reseed_op = op == "reseed";
+        if (!planting && !tip && !rerun && !rebuild && !reseed_op && op != "replay") {
+            return fail("Unknown Latent Tree operation");
+        }
+
+        sd->reset_cancel_flag();
+        sd->set_flow_shift(params->sample_params.flow_shift);
+        if (!sd->apply_loras(params->loras, params->lora_count)) {
+            return fail("LoRA setup failed");
+        }
+        sd->apply_circular_axes(params->circular_x, params->circular_y);
+        const RefImageParams ref_image_params = sd->resolve_ref_image_params(params->ref_image_args);
+        GenerationRequest request(sd, params);
+        ImageVaeAxesGuard axes_guard(sd, params, request);
+        SamplePlan plan(sd, params, request);
+        if (plan.sigmas.size() < 2) {
+            return fail("The schedule has no steps");
+        }
+
+        sd::tree::CardCopy session_info;
+        sd::tree::session_query(sd, 0, &session_info);
+        sd::tree::CardCopy card;
+        sd::tree::CardCopy parent;
+        if (!planting) {
+            if (!sd::tree::session_query(sd, card_id, &card) || !card.found) {
+                return fail("Select a card first");
+            }
+        }
+        if (rerun) {
+            if (card.parent <= 0 || card.kind != "step") {
+                return fail("Re-run cannot touch the root");
+            }
+            if (!sd::tree::session_query(sd, card.parent, &parent) || !parent.found || parent.kind != "step") {
+                return fail("Re-run is for a sampler step");
+            }
+            if (!(parent.sigma > card.sigma)) {
+                return fail("This step has no sigma to re-run");
+            }
+        }
+
+        const float sigma_ref = session_info.sigma_ref > 0.f ? session_info.sigma_ref : plan.sigmas.front();
+        if (tip) {
+            plan.sigmas = latent_tree_tip_sigmas(plan.sigmas, plan.sample_steps, request.strength > 0.f ? request.strength : 0.5f);
+        } else if (rerun) {
+            plan.sigmas = {parent.sigma, card.sigma};
+        } else if (!planting && !rebuild) {
+            plan.sigmas = card.tail;
+        }
+        if (plan.sigmas.size() < 2) {
+            return fail("This card has no remaining steps");
+        }
+
+        auto latents_opt = prepare_image_generation_latents(sd, params, &request, &plan, ref_image_params);
+        if (!latents_opt.has_value()) {
+            return fail("Could not prepare the latent");
+        }
+        ImageGenerationLatents latents = std::move(*latents_opt);
+        auto embeds_opt = prepare_image_generation_embeds(sd, params, &request, &plan, &latents, ref_image_params);
+        if (!embeds_opt.has_value()) {
+            return fail("Could not prepare the prompt");
+        }
+        ImageGenerationEmbeds embeds = std::move(*embeds_opt);
+        if (sd->get_cancel_flag() == SD_CANCEL_ALL) {
+            return fail("Cancelled");
+        }
+
+        sd::tree::RunStamp stamp;
+        stamp.anchor    = planting ? 0 : (rerun ? parent.id : card.id);
+        stamp.settings  = settings_json != nullptr ? settings_json : "{}";
+        stamp.sigma_ref = sigma_ref;
+        stamp.eta       = plan.eta;
+        stamp.ancestral = plan.sample_method == EULER_A_SAMPLE_METHOD;
+        stamp.seed      = request.seed;
+        stamp.sigmas    = &plan.sigmas;
+        std::string begin_error;
+        if (!sd::tree::session_begin(sd, stamp, request.width, request.height, planting, &begin_error)) {
+            return fail(begin_error.c_str());
+        }
+        struct TreeEnd {
+            StableDiffusionGGML* sd = nullptr;
+            ~TreeEnd() {
+                if (sd != nullptr) {
+                    sd::tree::session_end(sd);
+                }
+            }
+        } tree_end{sd};
+        struct RngRestore {
+            StableDiffusionGGML* sd;
+            std::shared_ptr<RNG> saved;
+            explicit RngRestore(StableDiffusionGGML* engine)
+                : sd(engine), saved(engine->sampler_rng) {}
+            ~RngRestore() {
+                sd->sampler_rng = saved;
+            }
+        } rng_restore(sd);
+
+        sd::Tensor<float> init = latents.init_latent;
+        sd::Tensor<float> noise;
+        const bool flow = sd->is_flow_denoiser();
+        if (planting) {
+            sd->rng->manual_seed(static_cast<uint64_t>(request.seed));
+            sd->sampler_rng->manual_seed(static_cast<uint64_t>(request.seed));
+            noise = sd::randn_like<float>(init, sd->rng);
+        } else if (tip) {
+            sd->rng->manual_seed(static_cast<uint64_t>(request.seed));
+            sd->sampler_rng->manual_seed(static_cast<uint64_t>(request.seed));
+            sd::Tensor<float> draw = sd::Tensor<float>::randn(card.clean.shape(), sd->sampler_rng);
+            const float sigma0     = plan.sigmas.front();
+            init                   = card.clean * (1.f - sigma0) + draw * sigma0;
+        } else if (rerun) {
+            std::shared_ptr<RNG> rng;
+            if (request.seed == parent.seed && parent.rng_before) {
+                rng = parent.rng_before->clone();
+            } else {
+                rng = sd->sampler_rng->clone();
+                rng->manual_seed(static_cast<uint64_t>(request.seed));
+            }
+            sd->sampler_rng = rng;
+            init            = latent_tree_start(parent, true, flow, rng);
+        } else {
+            const bool do_reseed = reseed_op || (rebuild && reseed);
+            std::shared_ptr<RNG> rng;
+            if (do_reseed || !card.rng_after) {
+                rng = sd->sampler_rng->clone();
+                rng->manual_seed(static_cast<uint64_t>(request.seed));
+            } else {
+                rng = card.rng_after->clone();
+            }
+            sd->sampler_rng = rng;
+            init            = latent_tree_start(card, do_reseed, flow, rng);
+        }
+        if (init.empty()) {
+            return fail("The stored latent is empty");
+        }
+
+        sd::tree::LatentTreeHooks hooks;
+        hooks.sigma_ref = sigma_ref;
+        hooks.on_step   = [sd](sd::tree::LatentStepRecord rec) {
+            sd::tree::session_record(sd, std::move(rec));
+        };
+        const bool step_cards = plan.sample_method == EULER_SAMPLE_METHOD || plan.sample_method == EULER_A_SAMPLE_METHOD;
+        sd::Tensor<float> started;
+        if (!step_cards) {
+            started = init;
+        }
+        LOG_INFO("latent tree %s from card %d, %zu sigmas", op.c_str(), card_id, plan.sigmas.size());
+        sd::Tensor<float> sampled = sd->sample(sd->diffusion_model,
+                                               true,
+                                               std::move(init),
+                                               std::move(noise),
+                                               embeds.cond,
+                                               embeds.uncond,
+                                               embeds.img_uncond,
+                                               latents.control_image,
+                                               request.control_strength,
+                                               request.guidance,
+                                               plan.eta,
+                                               request.shifted_timestep,
+                                               plan.sample_method,
+                                               flow,
+                                               plan.extra_sample_args,
+                                               plan.sigmas,
+                                               latents.ref_latents,
+                                               ref_image_params,
+                                               latents.denoise_mask,
+                                               sd::Tensor<float>(),
+                                               1.f,
+                                               0,
+                                               static_cast<float>(request.fps),
+                                               request.cache_params,
+                                               false,
+                                               {},
+                                               embeds.nag.c_crossattn.empty() ? nullptr : &embeds.nag,
+                                               &hooks);
+        if (sampled.empty() && sd->get_cancel_flag() != SD_CANCEL_ALL) {
+            return fail("Sampling failed");
+        }
+        if (!step_cards && !sampled.empty() && sd->get_cancel_flag() != SD_CANCEL_ALL) {
+            sd::tree::LatentStepRecord rec;
+            rec.x_before = std::move(started);
+            rec.x_after  = sampled;
+            rec.clean    = std::move(sampled);
+            rec.sigma_in = plan.sigmas.front();
+            rec.sigma    = plan.sigmas.back();
+            rec.step     = static_cast<int>(plan.sigmas.size()) - 1;
+            if (sd->sampler_rng) {
+                rec.rng_after  = sd->sampler_rng->clone();
+                rec.rng_before = rec.rng_after;
+            }
+            sd::tree::session_record(sd, std::move(rec));
+        }
+        return true;
+    }
+
 }  // namespace sd::pipeline

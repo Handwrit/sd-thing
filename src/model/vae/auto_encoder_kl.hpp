@@ -3,6 +3,7 @@
 
 #include <cinttypes>
 #include "core/ggml_tensor_utils.h"
+#include "core/grad_safe.h"
 #include "model/vae/vae.hpp"
 
 /*================================================== AutoEncoderKL ===================================================*/
@@ -41,12 +42,12 @@ public:
 
         auto h = x;
         h      = norm1->forward(ctx, h);
-        h      = ggml_silu_inplace(ctx->ggml_ctx, h);  // swish
+        h      = sd::maybe_silu(ctx->ggml_ctx, h);  // swish
         h      = conv1->forward(ctx, h);
         // return h;
 
         h = norm2->forward(ctx, h);
-        h = ggml_silu_inplace(ctx->ggml_ctx, h);  // swish
+        h = sd::maybe_silu(ctx->ggml_ctx, h);  // swish
         // dropout, skip for inference
         h = conv2->forward(ctx, h);
 
@@ -361,7 +362,7 @@ public:
 
         // end
         h = norm_out->forward(ctx, h);
-        h = ggml_silu_inplace(ctx->ggml_ctx, h);  // nonlinearity/swish
+        h = sd::maybe_silu(ctx->ggml_ctx, h);  // nonlinearity/swish
         h = conv_out->forward(ctx, h);            // [N, z_channels*2, h, w]
         return h;
     }
@@ -488,7 +489,7 @@ public:
         }
 
         h = norm_out->forward(ctx, h);
-        h = ggml_silu_inplace(ctx->ggml_ctx, h);  // nonlinearity/swish
+        h = sd::maybe_silu(ctx->ggml_ctx, h);  // nonlinearity/swish
         h = conv_out->forward(ctx, h);            // [N, out_ch, h*8, w*8]
         return h;
     }
@@ -727,12 +728,23 @@ struct AutoEncoderKL : public VAE {
     }
 
     ggml_cgraph* build_graph(const sd::Tensor<float>& z_tensor, bool decode_graph) {
-        ggml_cgraph* gf = ggml_new_graph(compute_ctx);
+        size_t graph_size = GGML_DEFAULT_GRAPH_SIZE;
+        if (graph_grads_enabled) {
+            graph_size = static_cast<size_t>(VAE_GRAPH_SIZE) * 8;
+        }
+        ggml_cgraph* gf = new_graph_custom(graph_size);
         ggml_tensor* z  = make_input(z_tensor);
+        if (graph_grads_enabled) {
+            ggml_set_name(z, "dno_z");
+            ggml_set_param(z);
+        }
 
         auto runner_ctx = get_context();
 
         ggml_tensor* out = decode_graph ? ae.decode(&runner_ctx, z) : ae.encode(&runner_ctx, z);
+        if (graph_grads_enabled) {
+            ggml_set_name(out, "dno_rgb");
+        }
 
         ggml_build_forward_expand(gf, out);
 

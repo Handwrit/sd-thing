@@ -515,6 +515,48 @@ SD_API bool generate_image(sd_ctx_t* sd_ctx,
                            sd_image_t** images_out,
                            int* num_images_out);
 
+// One in-memory Flux 2 latent tree. Cards stay in the process.
+// JSON and byte buffers from these calls are released with sd_latent_tree_free.
+SD_API bool sd_latent_tree_run(sd_ctx_t* sd_ctx,
+                               const char* op,
+                               int card_id,
+                               int reseed,
+                               const sd_img_gen_params_t* params,
+                               const char* settings_json,
+                               char* error,
+                               size_t error_size);
+SD_API char* sd_latent_tree_state_json(sd_ctx_t* sd_ctx);
+SD_API bool sd_latent_tree_card_rgb(sd_ctx_t* sd_ctx,
+                                    int card_id,
+                                    int which,
+                                    uint8_t** data_out,
+                                    int* width,
+                                    int* height,
+                                    int* channels);
+SD_API bool sd_latent_tree_close(sd_ctx_t* sd_ctx, char* error, size_t error_size);
+SD_API bool sd_latent_tree_bake(sd_ctx_t* sd_ctx, int card_id, sd_image_t* image_out, char* error, size_t error_size);
+SD_API bool sd_latent_tree_paint_export(sd_ctx_t* sd_ctx,
+                                        int card_id,
+                                        uint8_t** data_out,
+                                        size_t* size_out,
+                                        char* error,
+                                        size_t error_size);
+SD_API bool sd_latent_tree_paint_import(sd_ctx_t* sd_ctx,
+                                        int card_id,
+                                        const uint8_t* data,
+                                        size_t size,
+                                        char* error,
+                                        size_t error_size);
+// Forks a child card. op is "dcw" or "threshold". Does not change the parent.
+SD_API bool sd_latent_tree_operate(sd_ctx_t* sd_ctx,
+                                   int card_id,
+                                   const char* op,
+                                   float amount,
+                                   int* child_id,
+                                   char* error,
+                                   size_t error_size);
+SD_API void sd_latent_tree_free(void* ptr);
+
 enum sd_cancel_mode_t {
     // Stop the current generation as soon as possible.
     SD_CANCEL_ALL,

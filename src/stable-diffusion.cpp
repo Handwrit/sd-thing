@@ -3,13 +3,18 @@
 #include <algorithm>
 #include <cinttypes>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
+#include <cstring>
+#include <string>
+#include <vector>
 
 #include "core/ggml_extend.h"
 #include "core/util.h"
 #include "pipeline/diffusion_engine.h"
 #include "pipeline/generation.h"
 #include "pipeline/request.h"
+#include "runtime/latent_tree.hpp"
 
 #define NONE_STR "NONE"
 
@@ -737,6 +742,217 @@ enum sample_method_t sd_get_default_sample_method(const sd_ctx_t* sd_ctx) {
 
 enum scheduler_t sd_get_default_scheduler(const sd_ctx_t* sd_ctx, enum sample_method_t sample_method) {
     return sd::pipeline::default_scheduler(sd_ctx != nullptr ? sd_ctx->sd : nullptr, sample_method);
+}
+
+static void latent_tree_copy_error(char* error, size_t error_size, const std::string& message) {
+    if (error == nullptr || error_size == 0) {
+        return;
+    }
+    std::snprintf(error, error_size, "%s", message.c_str());
+}
+
+SD_API bool sd_latent_tree_run(sd_ctx_t* sd_ctx,
+                               const char* op,
+                               int card_id,
+                               int reseed,
+                               const sd_img_gen_params_t* params,
+                               const char* settings_json,
+                               char* error,
+                               size_t error_size) {
+    if (error != nullptr && error_size > 0) {
+        error[0] = '\0';
+    }
+    if (sd_ctx == nullptr || sd_ctx->sd == nullptr || params == nullptr) {
+        latent_tree_copy_error(error, error_size, "Latent Tree is missing a context");
+        return false;
+    }
+    StableDiffusionGGML::ExecutionScope execution(*sd_ctx->sd);
+    if (!execution.ready) {
+        latent_tree_copy_error(error, error_size, "Latent Tree could not use the model");
+        return false;
+    }
+    return sd::pipeline::run_latent_tree(sd_ctx->sd, op, card_id, reseed != 0, params, settings_json, error, error_size);
+}
+
+SD_API char* sd_latent_tree_state_json(sd_ctx_t* sd_ctx) {
+    const std::string json = sd::tree::session_json(sd_ctx != nullptr ? sd_ctx->sd : nullptr);
+    char* out              = static_cast<char*>(std::malloc(json.size() + 1));
+    if (out == nullptr) {
+        return nullptr;
+    }
+    std::memcpy(out, json.c_str(), json.size() + 1);
+    return out;
+}
+
+SD_API bool sd_latent_tree_card_rgb(sd_ctx_t* sd_ctx,
+                                    int card_id,
+                                    int which,
+                                    uint8_t** data_out,
+                                    int* width,
+                                    int* height,
+                                    int* channels) {
+    if (data_out != nullptr) {
+        *data_out = nullptr;
+    }
+    if (sd_ctx == nullptr || sd_ctx->sd == nullptr || data_out == nullptr) {
+        return false;
+    }
+    std::vector<uint8_t> rgb;
+    int w = 0, h = 0, c = 0;
+    if (!sd::tree::session_card_rgb(sd_ctx->sd, card_id, which, &rgb, &w, &h, &c) || rgb.empty()) {
+        return false;
+    }
+    uint8_t* data = static_cast<uint8_t*>(std::malloc(rgb.size()));
+    if (data == nullptr) {
+        return false;
+    }
+    std::memcpy(data, rgb.data(), rgb.size());
+    *data_out = data;
+    if (width) {
+        *width = w;
+    }
+    if (height) {
+        *height = h;
+    }
+    if (channels) {
+        *channels = c;
+    }
+    return true;
+}
+
+SD_API bool sd_latent_tree_close(sd_ctx_t* sd_ctx, char* error, size_t error_size) {
+    if (error != nullptr && error_size > 0) {
+        error[0] = '\0';
+    }
+    if (sd_ctx == nullptr || sd_ctx->sd == nullptr) {
+        return true;
+    }
+    std::string message;
+    if (!sd::tree::session_close(sd_ctx->sd, &message)) {
+        latent_tree_copy_error(error, error_size, message);
+        return false;
+    }
+    return true;
+}
+
+SD_API bool sd_latent_tree_bake(sd_ctx_t* sd_ctx, int card_id, sd_image_t* image_out, char* error, size_t error_size) {
+    if (error != nullptr && error_size > 0) {
+        error[0] = '\0';
+    }
+    if (image_out != nullptr) {
+        *image_out = sd_image_t{0, 0, 0, nullptr};
+    }
+    if (sd_ctx == nullptr || sd_ctx->sd == nullptr) {
+        latent_tree_copy_error(error, error_size, "Latent Tree is missing a context");
+        return false;
+    }
+    StableDiffusionGGML::ExecutionScope execution(*sd_ctx->sd);
+    if (!execution.ready) {
+        latent_tree_copy_error(error, error_size, "Latent Tree could not use the model");
+        return false;
+    }
+    std::string message;
+    if (!sd::tree::session_bake(sd_ctx->sd, card_id, image_out, &message)) {
+        latent_tree_copy_error(error, error_size, message);
+        return false;
+    }
+    return true;
+}
+
+SD_API bool sd_latent_tree_paint_export(sd_ctx_t* sd_ctx,
+                                        int card_id,
+                                        uint8_t** data_out,
+                                        size_t* size_out,
+                                        char* error,
+                                        size_t error_size) {
+    if (error != nullptr && error_size > 0) {
+        error[0] = '\0';
+    }
+    if (data_out != nullptr) {
+        *data_out = nullptr;
+    }
+    if (size_out != nullptr) {
+        *size_out = 0;
+    }
+    if (sd_ctx == nullptr || sd_ctx->sd == nullptr || data_out == nullptr || size_out == nullptr) {
+        latent_tree_copy_error(error, error_size, "Latent Tree is missing a context");
+        return false;
+    }
+    StableDiffusionGGML::ExecutionScope execution(*sd_ctx->sd);
+    if (!execution.ready) {
+        latent_tree_copy_error(error, error_size, "Latent Tree could not use the model");
+        return false;
+    }
+    std::vector<uint8_t> tiff;
+    std::string message;
+    if (!sd::tree::session_paint_export(sd_ctx->sd, card_id, &tiff, &message) || tiff.empty()) {
+        latent_tree_copy_error(error, error_size, message.empty() ? "Paint export failed" : message);
+        return false;
+    }
+    uint8_t* data = static_cast<uint8_t*>(std::malloc(tiff.size()));
+    if (data == nullptr) {
+        latent_tree_copy_error(error, error_size, "Out of memory");
+        return false;
+    }
+    std::memcpy(data, tiff.data(), tiff.size());
+    *data_out = data;
+    *size_out = tiff.size();
+    return true;
+}
+
+SD_API bool sd_latent_tree_paint_import(sd_ctx_t* sd_ctx,
+                                        int card_id,
+                                        const uint8_t* data,
+                                        size_t size,
+                                        char* error,
+                                        size_t error_size) {
+    if (error != nullptr && error_size > 0) {
+        error[0] = '\0';
+    }
+    if (sd_ctx == nullptr || sd_ctx->sd == nullptr || data == nullptr || size == 0) {
+        latent_tree_copy_error(error, error_size, "Paint file is empty");
+        return false;
+    }
+    StableDiffusionGGML::ExecutionScope execution(*sd_ctx->sd);
+    if (!execution.ready) {
+        latent_tree_copy_error(error, error_size, "Latent Tree could not use the model");
+        return false;
+    }
+    std::string message;
+    if (!sd::tree::session_paint_import(sd_ctx->sd, card_id, data, size, &message)) {
+        latent_tree_copy_error(error, error_size, message);
+        return false;
+    }
+    return true;
+}
+
+SD_API bool sd_latent_tree_operate(sd_ctx_t* sd_ctx,
+                                   int card_id,
+                                   const char* op,
+                                   float amount,
+                                   int* child_id,
+                                   char* error,
+                                   size_t error_size) {
+    if (error != nullptr && error_size > 0) {
+        error[0] = '\0';
+    }
+    if (child_id != nullptr) {
+        *child_id = 0;
+    }
+    if (sd_ctx == nullptr || sd_ctx->sd == nullptr) {
+        latent_tree_copy_error(error, error_size, "Latent Tree is missing a context");
+        return false;
+    }
+    std::string message;
+    if (!sd::tree::session_operate(sd_ctx->sd, card_id, op, amount, child_id, &message)) {
+        latent_tree_copy_error(error, error_size, message);
+        return false;
+    }
+    return true;
+}
+
+SD_API void sd_latent_tree_free(void* ptr) {
+    std::free(ptr);
 }
 
 SD_API bool generate_image(sd_ctx_t* sd_ctx,

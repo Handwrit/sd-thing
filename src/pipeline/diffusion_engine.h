@@ -23,6 +23,12 @@
 #include "stable-diffusion.h"
 
 class RNG;
+
+namespace sd {
+    namespace tree {
+        struct LatentTreeHooks;
+    }
+}
 struct Denoiser;
 struct LoraModel;
 struct ConditionerParams;
@@ -447,7 +453,8 @@ public:
                              const sd_cache_params_t* cache_params,
                              bool preview_final_step,
                              const sd::Tensor<float>& video_positions = {},
-                             const SDCondition* nag_cond              = nullptr);
+                             const SDCondition* nag_cond              = nullptr,
+                             sd::tree::LatentTreeHooks* latent_tree   = nullptr);
 
     int get_vae_scale_factor();
 

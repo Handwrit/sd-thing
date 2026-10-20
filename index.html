@@ -587,10 +587,10 @@
     }
     #shapeCanvas { cursor: crosshair; image-rendering: pixelated; touch-action: none; }
     .shape-foot-spacer { flex: 1; }
-    #shapeDropAsk span { margin-right: auto; }
+    #shapeDropAsk span { margin-right: 1.5rem; }
     #shapeDropYes {
       flex: 0 0 auto;
-      margin-left: 0.9rem;
+      margin-left: auto;
       background: #a12622;
       border-color: #7d1c19;
       color: #fff;
@@ -653,6 +653,62 @@
       background: #11141c;
       border-radius: 6px;
     }
+    .schedule-tip {
+      position: fixed;
+      z-index: 40;
+      pointer-events: none;
+      background: #1c2230;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.15rem 0.4rem;
+      font-size: 0.75rem;
+      white-space: nowrap;
+    }
+    .schedule-tip[hidden] { display: none; }
+    .shape-duration {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      margin-top: 0.45rem;
+    }
+    .shape-duration[hidden] { display: none !important; }
+    .shape-duration-label {
+      color: var(--muted);
+      font-size: 0.75rem;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .shape-span {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .shape-span input[type="radio"] { margin: 0; }
+    .shape-span input[type="text"] {
+      width: 5.5rem;
+      margin-left: auto;
+    }
+    .shape-span input:disabled { opacity: 0.45; }
+    .shape-strength {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0.45rem;
+    }
+    .shape-strength[hidden] { display: none !important; }
+    .shape-strength label {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      flex: 1;
+      margin: 0;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .shape-strength span { min-width: 2.4rem; text-align: right; font-size: 0.75rem; }
     .designer-controls {
       display: flex;
       flex-direction: column;
@@ -737,6 +793,115 @@
     .status.live {
       color: var(--text);
     }
+    .status a {
+      color: inherit;
+      text-underline-offset: 2px;
+    }
+    .status a:hover { color: var(--text); }
+    #treeBake {
+      background: #2fbf71;
+      color: #062014;
+      font-weight: 700;
+    }
+    #treeBake:hover:not(:disabled) { background: #49d488; }
+    #treeLeave {
+      background: #6b4226;
+      color: #f6ead8;
+      font-weight: 700;
+    }
+    #treeLeave:hover:not(:disabled) { background: #8a5632; }
+    [hidden] { display: none !important; }
+    .tree-enter { width: 100%; }
+    .tree-tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.45rem 0.7rem;
+      align-items: center;
+      padding: 0.35rem 0 0.15rem;
+    }
+    .tree-tools label { display: flex; align-items: center; gap: 0.35rem; text-transform: none; letter-spacing: 0; }
+    .tree-tools input[type="range"] { width: 7rem; }
+    .tree-note { flex-basis: 100%; margin: 0; color: var(--muted); font-size: 0.82rem; }
+    .tree-ops { flex-basis: 100%; display: flex; flex-direction: column; gap: 0.35rem; }
+    .tree-ops-label {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+    .tree-op { display: flex; align-items: center; gap: 0.45rem; }
+    .tree-op > span:first-child { width: 5.6rem; flex: 0 0 auto; color: var(--text); font-size: 0.85rem; }
+    .tree-op input[type="range"] { flex: 1 1 auto; width: auto; min-width: 4rem; }
+    .tree-op .op-readout { width: 3.2rem; flex: 0 0 auto; font-variant-numeric: tabular-nums; font-size: 0.82rem; }
+    .tree-op button { flex: 0 0 auto; width: auto; }
+    .lt-card.kind-dcw img { box-shadow: inset 0 0 0 3px #2fbf71; }
+    .lt-card.kind-paint img { box-shadow: inset 0 0 0 3px #4c8dff; }
+    .lt-card.kind-threshold img { box-shadow: inset 0 0 0 3px #c084fc; }
+    .tree-revert {
+      margin-left: 0.35rem;
+      padding: 0 0.35rem;
+      font-size: 0.72rem;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    body.latent-tree-on #queueField,
+    body.latent-tree-on .stage-bottom,
+    body.latent-tree-on #gallery { display: none; }
+    body.latent-tree-on .viewport {
+      display: block;
+      overflow: auto;
+      border-style: solid;
+    }
+    body.tree-lock .controls :is(input, textarea, select, button):not(#cancelBtn):not(#treeLeave):not(#treeLeaveNo):not(#treeLeaveYes) {
+      pointer-events: none;
+      opacity: 0.55;
+    }
+    #treeLeaveAsk {
+      flex-basis: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+    }
+    #treeLeaveAsk span { margin-right: 1.5rem; }
+    #treeLeaveAsk button { width: auto; flex: 0 0 auto; }
+    #treeLeaveYes {
+      margin-left: auto;
+      background: #a12622;
+      border-color: #7d1c19;
+      color: #fff;
+    }
+    #treeLeaveYes:hover { background: #c2342e; }
+    .latent-tree { position: relative; min-height: 100%; }
+    .latent-tree svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .lt-card { position: absolute; width: 104px; user-select: none; }
+    .lt-card img {
+      width: 96px;
+      height: 96px;
+      display: block;
+      background: #111;
+      image-rendering: pixelated;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .lt-card.selected img { outline: 2px solid var(--text); outline-offset: 2px; }
+    .lt-sigma {
+      margin-top: 6px;
+      background: #000;
+      color: #e10600;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      line-height: 1.4;
+      border-radius: 2px;
+    }
+    .latent-empty {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -744,13 +909,44 @@
   <div class="controls">
     <div class="gen-top">
       <div id="status" class="status">Ready (Target: Port 1493, ComfyUI RNG)</div>
+      <button id="treeToggle" class="btn-secondary tree-enter" type="button" hidden>Latent Tree</button>
       <div class="gen-actions">
         <button id="cancelBtn" class="btn-cancel" type="button" disabled onclick="cancelCurrent()">Cancel</button>
+        <button id="treeRerun" class="btn-secondary" type="button" hidden>Re-run this step</button>
         <button id="genBtn" class="btn-primary" type="button" onclick="enqueueGenerate()">Generate Image</button>
       </div>
     </div>
+    <div id="treeTools" class="tree-tools" hidden>
+      <div id="treeOps" class="tree-ops">
+        <span class="tree-ops-label">Operations</span>
+        <div class="tree-op">
+          <span>DCW</span>
+          <input type="range" id="dcwAmount" min="0" max="1" step="0.05" value="0.3" />
+          <span id="dcwReadout" class="op-readout">0.30</span>
+          <button id="treeDcw" class="btn-secondary" type="button">Apply</button>
+        </div>
+        <div class="tree-op">
+          <span>Threshold</span>
+          <input type="range" id="threshAmount" min="0.9" max="1" step="0.005" value="0.995" />
+          <span id="threshReadout" class="op-readout">0.995</span>
+          <button id="treeThresh" class="btn-secondary" type="button">Apply</button>
+        </div>
+      </div>
+      <label id="treeStrengthWrap" hidden>Strength <input type="number" id="treeStrength" min="0.05" max="1" step="0.05" value="0.5" style="width:4.5rem;" /></label>
+      <button id="treeBake" class="btn-secondary" type="button">Bake</button>
+      <button id="treePaint" class="btn-secondary" type="button">Paint</button>
+      <button id="treePaintLoad" class="btn-secondary" type="button">Load paint</button>
+      <input id="treePaintFile" type="file" accept=".tif,.tiff,image/tiff" hidden />
+      <button id="treeLeave" class="btn-secondary" type="button">Leave</button>
+      <div id="treeLeaveAsk" hidden>
+        <span>Leave Latent Tree?</span>
+        <button class="btn-secondary" type="button" id="treeLeaveNo">No</button>
+        <button class="btn-primary" type="button" id="treeLeaveYes">Yes</button>
+      </div>
+      <p id="treeSeedNote" class="tree-note" hidden></p>
+    </div>
 
-    <div class="field-group">
+    <div class="field-group" id="queueField">
       <label>Queue</label>
       <div id="queueList" class="queue-list"></div>
     </div>
@@ -760,6 +956,22 @@
       <textarea id="prompt" placeholder="A cozy cabin in the misty pine forest...">a cinematic shot of an ancient library, dust motes in sunbeams, hyperrealistic, octane render</textarea>
       <div class="row prompt-actions" id="shapeActions" hidden>
         <button class="btn-secondary" type="button" id="useShapesBtn">Use shapes</button>
+      </div>
+      <div class="shape-strength" id="shapeStrengthRow" hidden>
+        <label>Strength <input type="range" id="shapeStrength" min="0" max="1" step="0.01" value="1" /></label>
+        <span id="shapeStrengthValue">1.00</span>
+      </div>
+      <div class="shape-duration" id="shapeDuration" hidden>
+        <div class="shape-duration-label">Shapes for how long?</div>
+        <label class="shape-span"><input type="radio" name="shapeSpan" value="all" checked /> Whole gen</label>
+        <label class="shape-span">
+          <input type="radio" name="shapeSpan" value="step" /> Step stop
+          <input type="text" id="shapeStopStep" value="1" inputmode="numeric" disabled />
+        </label>
+        <label class="shape-span">
+          <input type="radio" name="shapeSpan" value="sigma" /> Sigma
+          <input type="text" id="shapeStopSigma" value="0.50" inputmode="decimal" disabled />
+        </label>
       </div>
       <div class="row prompt-actions">
         <button class="btn-secondary" type="button" id="loadPromptBtn">Load prompt</button>
@@ -817,8 +1029,8 @@
     <div class="field-group">
       <label>Sampling Steps</label>
       <div class="slider-row">
-        <input type="range" id="steps" min="1" max="100" value="20" oninput="stepsNum.value = this.value; drawScheduleChart()" />
-        <input type="number" id="stepsNum" min="1" max="100" value="20" oninput="steps.value = this.value; drawScheduleChart()" />
+        <input type="range" id="steps" min="1" max="100" value="20" oninput="stepsNum.value = this.value; syncSchedEnd(); drawScheduleChart()" />
+        <input type="number" id="stepsNum" min="1" max="100" value="20" oninput="steps.value = this.value; syncSchedEnd(); drawScheduleChart()" />
       </div>
     </div>
 
@@ -909,7 +1121,6 @@
           <option value="dpm++2s_a">DPM++ 2S a</option>
           <option value="heun">Heun</option>
           <option value="lcm">LCM</option>
-          <option value="ddim_trailing">DDIM</option>
         </select>
       </div>
       <div class="field-group" style="flex:1">
@@ -935,6 +1146,20 @@
           <option value="flux">Flux</option>
           <option value="beta">Beta</option>
         </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field-group" style="flex:1">
+        <label>Start step</label>
+        <input type="number" id="schedStart" min="1" max="100" step="1" value="1" oninput="drawScheduleChart()" />
+      </div>
+      <div class="field-group" style="flex:1">
+        <label>End step</label>
+        <input type="number" id="schedEnd" min="1" max="100" step="1" value="20" data-follow="1" oninput="onSchedEndInput()" />
+      </div>
+      <div class="field-group" id="etaGroup" style="flex:1" hidden>
+        <label>Eta</label>
+        <input type="number" id="ancestralEta" min="0" max="1" step="0.05" value="1" />
       </div>
     </div>
 
@@ -1007,6 +1232,7 @@
       <div id="designerControls" class="designer-controls"></div>
     </div>
     <canvas id="scheduleChart" width="360" height="160"></canvas>
+    <div id="scheduleTip" class="schedule-tip" hidden></div>
 
     <div class="field-group">
       <label>Client log</label>
@@ -1016,6 +1242,7 @@
 
   <div class="stage">
     <div class="viewport">
+      <div id="latentTree" class="latent-tree" hidden></div>
       <div id="gallery" class="gallery"></div>
     </div>
     <div class="stage-bottom">
@@ -1082,12 +1309,18 @@
     const apiBase = 'http://127.0.0.1:1493';
     const apiBaseReady = Promise.resolve();
     const DESIGNER_SENTINEL = '__designer__';
-    const SIGMA_MIN = 0.03;
-    const SIGMA_MAX = 14;
+    const TIMESTEP_COUNT = 1000;
     let selectedOutput = null;
     let autoShowResult = true;
     let pendingJobs = [];
     let currentJob = null;
+    let treeOn = false;
+    let treeRunning = false;
+    let treeCards = [];
+    let treeSelected = 0;
+    let treeFlip = false;
+    let treeConform = null;
+    let treeSig = '';
     let previewUrl = null;
     let previewWantKey = null;
     let previewShownKey = null;
@@ -1139,6 +1372,9 @@
         height: value('height'),
         sampler: value('sampler'),
         scheduler: value('scheduler'),
+        schedStart: value('schedStart'),
+        schedEnd: value('schedEnd'),
+        ancestralEta: value('ancestralEta'),
         batchSize: value('batchSize'),
         clipSkip: value('clipSkip'),
         enableHr: document.getElementById('enableHr').checked,
@@ -1153,6 +1389,11 @@
         qwenUseInit: document.getElementById('qwenUseInit').checked,
         ref3On: ref3On,
         ref4On: ref4On,
+        shapeSpan: (document.querySelector('input[name="shapeSpan"]:checked') || {}).value || 'all',
+        shapeStopStep: value('shapeStopStep'),
+        shapeStopSigma: value('shapeStopSigma'),
+        shapeStrength: value('shapeStrength'),
+        treeStrength: value('treeStrength'),
       };
     }
 
@@ -1177,8 +1418,19 @@
       set('cfgNum', form.cfg);
       set('width', form.width);
       set('height', form.height);
-      set('sampler', form.sampler);
+      if (form.sampler === 'ddim_trailing') {
+        set('sampler', 'euler_a');
+        set('ancestralEta', '0');
+      } else {
+        set('sampler', form.sampler);
+        set('ancestralEta', form.ancestralEta == null || form.ancestralEta === '' ? '1' : form.ancestralEta);
+      }
       set('scheduler', form.scheduler);
+      set('schedStart', form.schedStart == null || form.schedStart === '' ? '1' : form.schedStart);
+      set('schedEnd', form.schedEnd == null || form.schedEnd === '' ? document.getElementById('stepsNum').value : form.schedEnd);
+      const endEl = document.getElementById('schedEnd');
+      if (endEl) endEl.dataset.follow = String(endEl.value) === String(document.getElementById('stepsNum').value) ? '1' : '0';
+      syncSamplerExtras();
       set('batchSize', form.batchSize);
       set('clipSkip', form.clipSkip);
       set('hrScale', form.hrScale);
@@ -1200,6 +1452,23 @@
       if (typeof form.qwenUseInit === 'boolean') {
         document.getElementById('qwenUseInit').checked = form.qwenUseInit;
       }
+      if (form.shapeSpan) {
+        const span = document.querySelector('input[name="shapeSpan"][value="' + form.shapeSpan + '"]');
+        if (span) span.checked = true;
+      }
+      set('shapeStopStep', form.shapeStopStep);
+      set('shapeStopSigma', form.shapeStopSigma);
+      set('shapeStrength', form.shapeStrength);
+      set('treeStrength', form.treeStrength);
+      showShapeStrength();
+      const sigmaBox = document.getElementById('shapeStopSigma');
+      if (sigmaBox) {
+        const n = Number(sigmaBox.value);
+        if (Number.isFinite(n)) sigmaBox.dataset.good = Math.min(0.99, Math.max(0.01, n)).toFixed(2);
+      }
+      syncShapeSpan();
+      correctShapeStopStep();
+      correctShapeStopSigma();
       if (typeof form.ref3On === 'boolean') ref3On = form.ref3On;
       if (typeof form.ref4On === 'boolean') ref4On = form.ref4On;
       syncRefChrome();
@@ -1409,8 +1678,19 @@
 
     function setStatusText(text, live) {
       const status = document.getElementById('status');
-      status.innerText = text;
+      status.replaceChildren(document.createTextNode(text));
       status.classList.toggle('live', !!live);
+    }
+
+    function setStatusFile(label, name) {
+      const status = document.getElementById('status');
+      const link = document.createElement('a');
+      link.href = studioBase + '/files/' + encodeURIComponent(name);
+      link.target = '_blank';
+      link.rel = 'noopener';
+      link.textContent = label + name;
+      status.classList.remove('live');
+      status.replaceChildren(link);
     }
 
     function rememberQueuedSchedule(payload) {
@@ -1854,6 +2134,103 @@
       return !!el.checked;
     }
 
+    function modelFamily() {
+      const name = (connectedModel || '').toLowerCase();
+      if (name.includes('flux2') || name.includes('flux.2') || name.includes('flux-2')) return 'flux2';
+      if (name.includes('flux')) return 'flux';
+      if (name.includes('ltx')) return 'ltx';
+      if (name.includes('ideogram')) return 'ideogram';
+      if (name.includes('qwen')) return 'qwen';
+      if (name.includes('minimax') && name.includes('h3')) return 'h3';
+      if (name.includes('hunyuan')) return 'hunyuan';
+      if (name.includes('wan')) return 'wan';
+      if (name.includes('sdxl') || name.includes('xl')) return 'sdxl';
+      if (name.includes('svd')) return 'svd';
+      if (name.includes('ernie')) return 'ernie';
+      if (name.includes('sd3') || name.includes('anima')) return 'flow';
+      return 'sd';
+    }
+
+    function flowShiftFor(family) {
+      if (family === 'flux') {
+        return (connectedModel || '').toLowerCase().includes('schnell') ? 1 : 1.15;
+      }
+      if (family === 'ltx') return 2.37;
+      if (family === 'h3') return 12;
+      if (family === 'hunyuan') return 7;
+      if (family === 'wan') return 5;
+      if (family === 'ernie') return 4;
+      if (family === 'qwen' || family === 'flow') return 3;
+      return 1;
+    }
+
+    function usesFluxDenoiser(family) {
+      return family === 'flux' || family === 'flux2' || family === 'ltx';
+    }
+
+    function usesFlowDenoiser(family) {
+      return usesFluxDenoiser(family) || family === 'h3' || family === 'hunyuan' || family === 'wan' || family === 'qwen' || family === 'flow' || family === 'ernie' || family === 'ideogram';
+    }
+
+    function f32(value) {
+      return Math.fround(value);
+    }
+
+    // Default scaled-linear beta schedule. A model that ships its own
+    // alphas_cumprod can differ; the page does not have that table.
+    let compvisSigmas = null;
+    function compvisSigmaTable() {
+      if (compvisSigmas) return compvisSigmas;
+      const start = Math.sqrt(0.00085);
+      const end = Math.sqrt(0.012);
+      const amount = end - start;
+      let product = 1;
+      const table = new Array(TIMESTEP_COUNT);
+      for (let i = 0; i < TIMESTEP_COUNT; i++) {
+        const beta = start + amount * (i / (TIMESTEP_COUNT - 1));
+        product *= 1 - beta * beta;
+        table[i] = Math.sqrt((1 - product) / product);
+      }
+      compvisSigmas = table;
+      return table;
+    }
+
+    function denoiserSigma(t) {
+      const family = modelFamily();
+      if (usesFluxDenoiser(family)) {
+        const unit = (t + 1) / TIMESTEP_COUNT;
+        if (unit <= 0) return 0;
+        if (unit >= 1) return 1;
+        return fluxTimeShift(flowShiftFor(family), unit);
+      }
+      if (usesFlowDenoiser(family)) {
+        const unit = (t + 1) / TIMESTEP_COUNT;
+        const shift = flowShiftFor(family);
+        if (shift === 1) return unit;
+        return shift * unit / (1 + (shift - 1) * unit);
+      }
+      const table = compvisSigmaTable();
+      const low = Math.max(0, Math.min(TIMESTEP_COUNT - 2, Math.floor(t)));
+      const high = Math.min(TIMESTEP_COUNT - 1, Math.ceil(t));
+      const w = t - low;
+      const logSigma = (1 - w) * Math.log(table[low]) + w * Math.log(table[high]);
+      return Math.exp(logSigma);
+    }
+
+    function sigmaBounds() {
+      return { min: denoiserSigma(0), max: denoiserSigma(999) };
+    }
+
+    function vaeScale() {
+      const family = modelFamily();
+      const name = (connectedModel || '').toLowerCase();
+      if (family === 'ltx') return 32;
+      if (family === 'flux2' || family === 'h3' || family === 'hunyuan' || family === 'ernie' || family === 'ideogram') return 16;
+      if (family === 'qwen' && isQwenImage21()) return 16;
+      if (family === 'wan' && name.includes('ti2v')) return 16;
+      return 8;
+    }
+
     function imageSeqLen() {
       let w = Number(document.getElementById('width').value) || 512;
       let h = Number(document.getElementById('height').value) || 512;
@@ -1861,7 +2238,17 @@
         w = round64(i2iSource.naturalWidth);
         h = round64(i2iSource.naturalHeight);
       }
-      return Math.max(1, Math.round((w / 16) * (h / 16)));
+      const scale = vaeScale();
+      let seq = Math.floor(w / scale) * Math.floor(h / scale);
+      const family = modelFamily();
+      const frames = Number(document.getElementById('videoFrames').value) || 1;
+      if (family === 'h3') {
+        const latent = frames <= 5 ? 2 : Math.floor((frames - 5) / 17) * 5 + 2;
+        seq *= latent;
+      } else if (family === 'ltx') {
+        seq *= Math.floor((Math.max(1, frames) - 1) / 8) + 1;
+      }
+      return seq;
     }
 
     function sigmoid(x) {
@@ -1895,6 +2282,141 @@
     }
 
     const AYS_SD15 = [14.6146412293, 6.4745760956, 3.8636745985, 2.6946151520, 1.8841921177, 1.3943805092, 0.9642583904, 0.6523686016, 0.3977456272, 0.1515232662, 0.0291671582];
+    const AYS_SDXL = [14.6146412293, 6.3184485287, 3.7681790315, 2.1811480769, 1.3405244945, 0.8620721141, 0.5550693289, 0.3798540708, 0.2332364134, 0.1114188177, 0.0291671582];
+    const AYS_SVD = [700, 54.5, 15.886, 7.977, 4.248, 1.789, 0.981, 0.403, 0.173, 0.034, 0.002];
+    const GITS_1_20 = [
+      [14.61464119, 0.803307, 0.02916753],
+      [14.61464119, 1.56271636, 0.52423614, 0.02916753],
+      [14.61464119, 2.36326075, 0.92192322, 0.36617002, 0.02916753],
+      [14.61464119, 2.84484982, 1.24153244, 0.59516323, 0.25053367, 0.02916753],
+      [14.61464119, 5.85520077, 2.05039096, 0.95350921, 0.45573691, 0.17026083, 0.02916753],
+      [14.61464119, 5.85520077, 2.45070267, 1.24153244, 0.64427125, 0.29807833, 0.09824532, 0.02916753],
+      [14.61464119, 5.85520077, 2.45070267, 1.36964464, 0.803307, 0.45573691, 0.25053367, 0.09824532, 0.02916753],
+      [14.61464119, 5.85520077, 2.84484982, 1.61558151, 0.95350921, 0.59516323, 0.36617002, 0.19894916, 0.09824532, 0.02916753],
+      [14.61464119, 5.85520077, 2.84484982, 1.67050016, 1.08895338, 0.74807048, 0.50118381, 0.32104823, 0.19894916, 0.09824532, 0.02916753],
+      [14.61464119, 5.85520077, 2.95596409, 1.84880662, 1.24153244, 0.83188516, 0.59516323, 0.41087446, 0.27464288, 0.17026083, 0.09824532, 0.02916753],
+      [14.61464119, 5.85520077, 3.07277966, 1.98035145, 1.36964464, 0.95350921, 0.69515091, 0.50118381, 0.36617002, 0.25053367, 0.17026083, 0.09824532, 0.02916753],
+      [14.61464119, 6.77309084, 3.46139455, 2.36326075, 1.56271636, 1.08895338, 0.803307, 0.59516323, 0.45573691, 0.34370604, 0.25053367, 0.17026083, 0.09824532, 0.02916753],
+      [14.61464119, 6.77309084, 3.46139455, 2.45070267, 1.61558151, 1.162866, 0.86115354, 0.64427125, 0.50118381, 0.38853383, 0.29807833, 0.22545385, 0.17026083, 0.09824532, 0.02916753],
+      [14.61464119, 7.49001646, 4.65472794, 3.07277966, 2.12350607, 1.51179266, 1.08895338, 0.83188516, 0.64427125, 0.50118381, 0.38853383, 0.29807833, 0.22545385, 0.17026083, 0.09824532, 0.02916753],
+      [14.61464119, 7.49001646, 4.65472794, 3.07277966, 2.12350607, 1.51179266, 1.08895338, 0.83188516, 0.64427125, 0.50118381, 0.41087446, 0.32104823, 0.25053367, 0.19894916, 0.13792117, 0.09824532, 0.02916753],
+      [14.61464119, 7.49001646, 4.65472794, 3.07277966, 2.12350607, 1.51179266, 1.08895338, 0.83188516, 0.64427125, 0.50118381, 0.41087446, 0.34370604, 0.27464288, 0.22545385, 0.17026083, 0.13792117, 0.09824532, 0.02916753],
+      [14.61464119, 7.49001646, 4.65472794, 3.07277966, 2.19988537, 1.61558151, 1.20157266, 0.92192322, 0.72133851, 0.57119018, 0.45573691, 0.36617002, 0.29807833, 0.25053367, 0.19894916, 0.17026083, 0.13792117, 0.09824532, 0.02916753],
+      [14.61464119, 7.49001646, 4.65472794, 3.07277966, 2.19988537, 1.61558151, 1.24153244, 0.95350921, 0.74807048, 0.59516323, 0.4783645, 0.38853383, 0.32104823, 0.27464288, 0.22545385, 0.19894916, 0.17026083, 0.13792117, 0.09824532, 0.02916753],
+      [14.61464119, 7.49001646, 4.65472794, 3.07277966, 2.19988537, 1.61558151, 1.24153244, 0.95350921, 0.74807048, 0.59516323, 0.50118381, 0.41087446, 0.34370604, 0.29807833, 0.25053367, 0.22545385, 0.19894916, 0.17026083, 0.13792117, 0.09824532, 0.02916753],
+    ];
+
+    function linearSpace(start, end, num) {
+      const result = [];
+      if (num <= 0) return result;
+      const inc = num === 1 ? 0 : f32((f32(end) - f32(start)) / (num - 1));
+      let value = f32(start);
+      result.push(value);
+      for (let i = 1; i < num; i++) {
+        value = f32(value + inc);
+        result.push(value);
+      }
+      return result;
+    }
+
+    function linearInterp(newX, refX, refY) {
+      const newY = new Array(newX.length);
+      let j = 0;
+      for (let i = 0; i < newX.length; i++) {
+        let x = newX[i];
+        if (x < refX[0]) x = refX[0];
+        if (x > refX[refX.length - 1]) x = refX[refX.length - 1];
+        while (j + 1 < refX.length - 1 && (refX[j] > x || x > refX[j + 1])) j++;
+        const span = refX[j + 1] - refX[j];
+        const perc = span === 0 ? 0 : (x - refX[j]) / span;
+        newY[i] = refY[j] * (1 - perc) + refY[j + 1] * perc;
+      }
+      return newY;
+    }
+
+    function logLinearInterpolation(sigmaIn, newLen) {
+      const sLen = sigmaIn.length;
+      const yVals = [];
+      for (let i = 0; i < sLen; i++) yVals.push(f32(Math.log(Math.max(sigmaIn[sLen - 1 - i], 1e-12))));
+      const newY = linearInterp(linearSpace(0, 1, newLen), linearSpace(0, 1, sLen), yVals);
+      const results = [];
+      for (let i = 0; i < newLen; i++) results.push(f32(Math.exp(newY[newLen - 1 - i])));
+      return results;
+    }
+
+    function logGamma(z) {
+      const p = [
+        676.5203681218851, -1259.1392167224028, 771.32342877765313,
+        -176.61502916214059, 12.507343278686905, -0.13857109526572012,
+        9.9843695780195716e-6, 1.5056327351493116e-7,
+      ];
+      if (z < 0.5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - logGamma(1 - z);
+      z -= 1;
+      let x = 0.99999999999980993;
+      for (let i = 0; i < p.length; i++) x += p[i] / (z + i + 1);
+      const t = z + p.length - 0.5;
+      return 0.5 * Math.log(2 * Math.PI) + (z + 0.5) * Math.log(t) - t + Math.log(x);
+    }
+
+    function betaLog(a, b) {
+      return logGamma(a) + logGamma(b) - logGamma(a + b);
+    }
+
+    function betaInc(x, a, b) {
+      if (x <= 0) return 0;
+      if (x >= 1) return 1;
+      const maxIter = 200;
+      const epsilon = 3e-7;
+      const tiny = 1e-30;
+      const qab = a + b;
+      const qap = a + 1;
+      const qam = a - 1;
+      let c = 1;
+      let d = 1 - qab * x / qap;
+      if (Math.abs(d) < tiny) d = tiny;
+      d = 1 / d;
+      let h = d;
+      for (let m = 1; m <= maxIter; m++) {
+        const m2 = 2 * m;
+        let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+        d = 1 + aa * d;
+        if (Math.abs(d) < tiny) d = tiny;
+        c = 1 + aa / c;
+        if (Math.abs(c) < tiny) c = tiny;
+        d = 1 / d;
+        h *= d * c;
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+        d = 1 + aa * d;
+        if (Math.abs(d) < tiny) d = tiny;
+        c = 1 + aa / c;
+        if (Math.abs(c) < tiny) c = tiny;
+        d = 1 / d;
+        const del = d * c;
+        h *= del;
+        if (Math.abs(del - 1) < epsilon) break;
+      }
+      return Math.exp(a * Math.log(x) + b * Math.log(1 - x) - betaLog(a, b)) / a * h;
+    }
+
+    function betaCdf(x, a, b) {
+      if (x === 0) return 0;
+      if (x === 1) return 1;
+      if (x < (a + 1) / (a + b + 2)) return betaInc(x, a, b);
+      return 1 - betaInc(1 - x, b, a);
+    }
+
+    function betaPpf(u, a, b) {
+      let x = 0.5;
+      for (let i = 0; i < 30; i++) {
+        const f = betaCdf(x, a, b) - u;
+        if (Math.abs(f) < 1e-10) break;
+        const df = Math.exp((a - 1) * Math.log(x) + (b - 1) * Math.log(1 - x) - betaLog(a, b));
+        x -= f / df;
+        if (x <= 0) x = 1e-10;
+        if (x >= 1) x = 1 - 1e-10;
+      }
+      return x;
+    }
 
     function resampleLog(levels, n) {
       if (n <= 1) return [levels[0]];
@@ -1909,146 +2431,235 @@
       return out;
     }
 
-    function previewSigmas(kind, n) {
-      const steps = Math.max(1, n | 0);
+    function scheduleSigmas(kind, n) {
       const out = [];
-      const tToSigma = (t) => lerp(SIGMA_MAX, SIGMA_MIN, 1 - (t / 999));
       const seq = imageSeqLen();
+      const bounds = sigmaBounds();
+      let sigmaMin = bounds.min;
+      let sigmaMax = bounds.max;
+      const pushTerminal = () => { out.push(0); };
+
       if (kind === 'karras') {
         const rho = 7;
-        const smin = Math.max(SIGMA_MIN, 1e-6);
-        const minInv = Math.pow(smin, 1 / rho);
-        const maxInv = Math.pow(SIGMA_MAX, 1 / rho);
-        for (let i = 0; i < steps; i++) {
-          const u = steps === 1 ? 0 : i / (steps - 1);
-          out.push(Math.pow(maxInv + u * (minInv - maxInv), rho));
+        if (sigmaMin <= 1e-6) sigmaMin = 1e-6;
+        if (n === 1) {
+          out.push(sigmaMax);
+        } else {
+          const minInv = Math.pow(sigmaMin, 1 / rho);
+          const maxInv = Math.pow(sigmaMax, 1 / rho);
+          for (let i = 0; i < n; i++) {
+            out.push(Math.pow(maxInv + i / (n - 1) * (minInv - maxInv), rho));
+          }
         }
+        pushTerminal();
       } else if (kind === 'exponential') {
-        const logMin = Math.log(Math.max(SIGMA_MIN, 1e-6));
-        const logMax = Math.log(SIGMA_MAX);
-        const step = steps === 1 ? 0 : (logMax - logMin) / (steps - 1);
-        for (let i = 0; i < steps; i++) out.push(Math.exp(logMax - step * i));
-      } else if (kind === 'ays') {
-        out.push(...resampleLog(AYS_SD15, steps));
-      } else if (kind === 'gits') {
-        for (let i = 0; i < steps; i++) {
-          const u = steps === 1 ? 0 : i / (steps - 1);
-          out.push(SIGMA_MAX * Math.pow(Math.max(SIGMA_MIN, 1e-6) / SIGMA_MAX, Math.pow(u, 1.2)));
+        if (sigmaMin <= 1e-6) sigmaMin = 1e-6;
+        if (n === 1) {
+          out.push(sigmaMax);
+        } else {
+          const logMin = Math.log(sigmaMin);
+          const logMax = Math.log(sigmaMax);
+          const step = (logMax - logMin) / (n - 1);
+          for (let i = 0; i < n; i++) out.push(Math.exp(logMax - step * i));
         }
+        pushTerminal();
+      } else if (kind === 'ays') {
+        const family = modelFamily();
+        const table = family === 'sdxl' ? AYS_SDXL : (family === 'svd' ? AYS_SVD : (family === 'sd' ? AYS_SD15 : null));
+        if (!table) {
+          for (let i = 0; i <= n; i++) out.push(0);
+        } else if (table.length === n + 1) {
+          out.push(...table);
+          out[n] = 0;
+        } else {
+          const stretched = logLinearInterpolation(table, n + 1);
+          stretched[n] = 0;
+          out.push(...stretched);
+        }
+      } else if (kind === 'gits') {
+        let row;
+        if (n <= 1) {
+          row = [GITS_1_20[0][0], 0];
+        } else if (n <= 20) {
+          row = GITS_1_20[n - 2].slice();
+          row[n] = 0;
+        } else {
+          row = logLinearInterpolation(GITS_1_20[GITS_1_20.length - 1], n + 1);
+          row[n] = 0;
+        }
+        out.push(...row);
       } else if (kind === 'bong_tangent') {
-        const start = SIGMA_MAX;
-        const end = SIGMA_MIN;
-        const middle = SIGMA_MIN + (SIGMA_MAX - SIGMA_MIN) * 0.5;
-        const total = steps + 2;
-        const pivot = Math.floor(total * 0.6);
+        const start = sigmaMax;
+        const end = sigmaMin;
+        const middle = sigmaMin + (sigmaMax - sigmaMin) * 0.5;
+        const total = n + 2;
+        const pivot = Math.trunc(total * 0.6);
+        const midpoint = Math.trunc(total * 0.6);
         const slope = 0.2 / (total / 40);
-        const midpoint = Math.floor(total * 0.6);
         const stage2 = total - midpoint;
         const stage1 = total - stage2;
         const s1 = bongTangentSeg(stage1, slope, pivot, start, middle);
         const s2 = bongTangentSeg(stage2, slope, pivot - stage1, middle, end);
         if (s1.length) s1.pop();
         out.push(...s1, ...s2);
-        while (out.length < steps) out.push(end);
-        if (out.length > steps) out.length = steps;
+        while (out.length < n + 1) out.push(end);
+        if (out.length > n + 1) out.length = n + 1;
+        out[n] = 0;
       } else if (kind === 'tangent') {
-        const expanded = steps + 2;
-        let mid = Math.round(designerNumber('midpoint', 0.5) * steps);
-        mid = Math.min(expanded - 1, Math.max(1, mid));
+        const level = (u) => sigmaMax * u;
+        const expanded = n + 2;
+        let mid = Math.round(designerNumber('midpoint', 0.5) * n);
+        if (mid < 1) mid = 1;
+        if (mid > expanded - 1) mid = expanded - 1;
         const stage1 = mid;
         const stage2 = expanded - mid;
-        const p1 = designerNumber('pivot_1', 0.25) * steps;
-        const p2 = designerNumber('pivot_2', 0.75) * steps;
-        const start = designerNumber('start', 1);
-        const middle = designerNumber('middle', 0.5);
-        const end = designerNumber('end', 0);
-        const s1 = bongTangentSeg(stage1, designerNumber('slope_1', 1), p1, start, middle);
-        const s2 = bongTangentSeg(stage2, designerNumber('slope_2', 1), p2 - stage1, middle, end);
+        const p1 = designerNumber('pivot_1', 0.25) * n;
+        const p2 = designerNumber('pivot_2', 0.75) * n;
+        const s1 = bongTangentSeg(stage1, designerNumber('slope_1', 1), p1, level(designerNumber('start', 1)), level(designerNumber('middle', 0.5)));
+        const s2 = bongTangentSeg(stage2, designerNumber('slope_2', 1), p2 - stage1, level(designerNumber('middle', 0.5)), level(designerNumber('end', 0)));
         if (s1.length) s1.pop();
         out.push(...s1, ...s2);
       } else if (kind === 'flux' || kind === 'flux2' || kind === 'ltx2') {
-        let mu;
+        const qwenFlux = kind === 'flux' && isQwenImage21();
+        let mu = 0;
+        let terminal = qwenFlux ? 0.02 : 0;
         if (kind === 'flux') {
           const base = designerNumber('base_shift', 0.5);
-          const max = designerNumber('max_shift', 1.15);
-          const m = (max - base) / (4096 - 256);
+          const max = designerNumber('max_shift', qwenFlux ? 0.9 : 1.15);
+          const maxSeq = qwenFlux ? 8192 : 4096;
+          const m = (max - base) / (maxSeq - 256);
           mu = seq * m + (base - m * 256);
         } else if (kind === 'ltx2') {
           const base = designerNumber('base_shift', 0.95);
           const max = designerNumber('max_shift', 2.05);
           const m = (max - base) / (4096 - 1024);
           mu = seq * m + (base - m * 1024);
+          terminal = Math.min(0.99, Math.max(0, designerNumber('terminal', 0.1)));
         } else {
           const m200 = 0.00016927 * seq + 0.45666666;
           const m10 = 8.73809524e-05 * seq + 1.89833333;
           const a = (m200 - m10) / 190;
-          mu = seq > 4300 ? m200 : a * steps + (m200 - 200 * a);
+          mu = seq > 4300 ? m200 : a * n + (m200 - 200 * a);
         }
-        for (let i = 0; i < steps; i++) {
-          const t = 1 - i / steps;
-          out.push(t <= 0 ? 0 : fluxTimeShift(mu, t));
+        for (let i = 0; i <= n; i++) {
+          const t = 1 - i / n;
+          if (t <= 0) out.push(0);
+          else if (t >= 1) out.push(1);
+          else out.push(fluxTimeShift(mu, t));
         }
-        if (kind === 'ltx2' && designerBool('stretch', true) && out.length > 1) {
-          const terminal = Math.min(0.99, Math.max(0, designerNumber('terminal', 0.1)));
-          const last = out[out.length - 1];
-          const scale = (1 - last) / (1 - terminal);
-          if (scale > 1e-8) {
-            for (let i = 0; i < out.length; i++) out[i] = 1 - (1 - out[i]) / scale;
+        const stretchLtx = kind === 'ltx2' && designerBool('stretch', true) && out.length > 2;
+        const stretchFlux = kind === 'flux' && terminal > 0 && n > 1;
+        if (stretchLtx || stretchFlux) {
+          const anchor = out[n - 1];
+          const scale = (1 - anchor) / (1 - terminal);
+          if (Number.isFinite(scale) && scale > 1e-8) {
+            for (let i = 0; i < n; i++) out[i] = 1 - (1 - out[i]) / scale;
           }
         }
+        out[n] = 0;
       } else if (kind === 'kl_optimal') {
-        const aMin = Math.atan(Math.max(SIGMA_MIN, 1e-6));
-        const aMax = Math.atan(SIGMA_MAX);
-        for (let i = 0; i < steps; i++) {
-          const u = steps === 1 ? 0 : i / (steps - 1);
-          out.push(Math.tan(u * aMin + (1 - u) * aMax));
+        if (n === 1) {
+          out.push(sigmaMax);
+        } else {
+          if (sigmaMin <= 1e-6) sigmaMin = 1e-6;
+          const aMin = Math.atan(sigmaMin);
+          const aMax = Math.atan(sigmaMax);
+          for (let i = 0; i < n; i++) {
+            const u = i / (n - 1);
+            out.push(Math.tan(u * aMin + (1 - u) * aMax));
+          }
         }
+        pushTerminal();
       } else if (kind === 'smoothstep') {
-        for (let i = 0; i < steps; i++) {
-          let u = 1 - i / steps;
-          u = u * u * (3 - 2 * u);
-          out.push(tToSigma(Math.round(u * 999)));
+        if (n === 1) {
+          out.push(denoiserSigma(999));
+        } else {
+          for (let i = 0; i < n; i++) {
+            let u = f32(1 - f32(f32(i) / f32(n)));
+            u = f32(f32(u * u) * f32(3 - f32(2 * u)));
+            out.push(denoiserSigma(Math.round(f32(u * 999))));
+          }
         }
+        pushTerminal();
       } else if (kind === 'beta') {
         const alpha = Math.max(0.05, designerNumber('alpha', 0.6));
         const beta = Math.max(0.05, designerNumber('beta', 0.6));
-        for (let i = 0; i < steps; i++) {
-          const u = 1 - i / steps;
-          const warped = Math.pow(u, beta / alpha) / (Math.pow(u, beta / alpha) + Math.pow(Math.max(1 - u, 1e-6), alpha / beta));
-          out.push(tToSigma(Math.round(Math.min(1, Math.max(0, warped)) * 999)));
+        if (n === 1) {
+          out.push(denoiserSigma(999));
+        } else {
+          let lastT = -1;
+          for (let i = 0; i < n; i++) {
+            const u = 1 - i / n;
+            const t = Math.round(betaPpf(u, alpha, beta) * 999);
+            if (t !== lastT) {
+              out.push(denoiserSigma(t));
+              lastT = t;
+            }
+          }
         }
+        pushTerminal();
       } else if (kind === 'logit_normal') {
         let mu = designerNumber('mu', 0);
         const std = Math.max(0.05, designerNumber('std', 1.75));
         if (designerBool('resolution_aware', true)) mu += 0.5 * Math.log(seq / ((512 * 512) / (16 * 16)));
         const tHi = sigmoid(0.5 * designerNumber('logsnr_max', 18));
         const tLo = sigmoid(0.5 * designerNumber('logsnr_min', -15));
-        for (let i = 0; i < steps; i++) {
-          const t = steps === 1 ? 0.5 : i / steps;
-          let y = sigmoid(mu + std * (-normsinv(Math.min(0.999, Math.max(0.001, t)))));
-          y = Math.min(tHi, Math.max(tLo, y));
-          out.push(y);
+        for (let i = 0; i < n; i++) {
+          const t = i / n;
+          const y = t <= 0 ? Infinity : mu + std * (-normsinv(t));
+          let timestep = sigmoid(y);
+          if (timestep > tHi) timestep = tHi;
+          if (timestep < tLo) timestep = tLo;
+          out.push(timestep);
         }
+        pushTerminal();
       } else if (kind === 'lcm') {
         const original = 50;
-        const k = 1000 / original;
-        for (let i = 0; i < steps; i++) {
-          const index = Math.floor((i * original) / steps);
-          const timestep = (original - index) * k - 1;
-          out.push(tToSigma(timestep));
+        const k = Math.trunc(1000 / original);
+        for (let i = 0; i < n; i++) {
+          const index = Math.floor((i * original) / n);
+          out.push(denoiserSigma((original - index) * k - 1));
         }
-      } else if (kind === 'simple' || kind === 'sgm_uniform' || kind === 'discrete') {
-        for (let i = 0; i < steps; i++) {
-          const u = steps === 1 ? 0 : i / (kind === 'discrete' ? (steps - 1) : steps);
-          out.push(tToSigma(Math.round((1 - u) * 999)));
+        pushTerminal();
+      } else if (kind === 'simple') {
+        const stepFactor = f32(f32(TIMESTEP_COUNT) / f32(n));
+        for (let i = 0; i < n; i++) {
+          const offset = Math.trunc(f32(f32(i) * stepFactor));
+          const timestep = Math.max(0, (TIMESTEP_COUNT - 1) - offset);
+          out.push(denoiserSigma(timestep));
         }
+        pushTerminal();
+      } else if (kind === 'sgm_uniform') {
+        const timesteps = linearSpace(999, 0, n + 1);
+        for (let i = 0; i < n; i++) out.push(denoiserSigma(timesteps[i]));
+        pushTerminal();
+      } else if (kind === 'discrete') {
+        if (n === 1) {
+          out.push(denoiserSigma(999));
+        } else {
+          const step = f32(f32(999) / f32(n - 1));
+          for (let i = 0; i < n; i++) {
+            const t = f32(f32(999) - f32(step * f32(i)));
+            out.push(denoiserSigma(t));
+          }
+        }
+        pushTerminal();
       } else {
-        for (let i = 0; i < steps; i++) {
-          const u = steps === 1 ? 0 : i / (steps - 1);
-          out.push(lerp(SIGMA_MAX, SIGMA_MIN, u));
+        for (let i = 0; i < n; i++) {
+          const u = n === 1 ? 0 : i / (n - 1);
+          out.push(lerp(sigmaMax, sigmaMin, u));
         }
+        pushTerminal();
       }
       return out;
+    }
+
+    function previewSigmas(kind, n) {
+      const steps = Math.max(1, n | 0);
+      const full = scheduleSigmas(kind, steps);
+      if (full.length === steps + 1) return full.slice(0, steps);
+      if (full.length > 1 && full[full.length - 1] === 0) return full.slice(0, -1);
+      return full.slice();
     }
 
     function designerExtraArgs() {
@@ -2200,16 +2811,17 @@
       rebuildSizeCalc();
       syncRefChrome();
       syncShapeButton();
+      syncTreeOffer();
     }
 
     function defaultScheduleKind() {
       const sampler = document.getElementById('sampler').value;
       if (sampler === 'lcm') return 'lcm';
-      if (sampler === 'ddim_trailing') return 'simple';
-      const name = connectedModel.toLowerCase();
-      if (name.includes('flux2') || name.includes('flux.2') || name.includes('flux-2')) return 'flux2';
-      if (name.includes('flux')) return 'flux';
-      if (name.includes('ltx')) return 'ltx2';
+      const family = modelFamily();
+      if (family === 'flux2') return 'flux2';
+      if (family === 'flux' || isQwenImage21()) return 'flux';
+      if (family === 'ltx') return 'ltx2';
+      if (family === 'ideogram') return 'logit_normal';
       return 'discrete';
     }
 
@@ -2230,6 +2842,36 @@
       return Math.max(0, Math.min(steps, steps - tEnc - 1));
     }
 
+    function syncSamplerExtras() {
+      const eta = document.getElementById('etaGroup');
+      const sampler = document.getElementById('sampler');
+      if (eta && sampler) eta.hidden = sampler.value !== 'euler_a';
+    }
+
+    function syncSchedEnd() {
+      const end = document.getElementById('schedEnd');
+      const steps = document.getElementById('stepsNum');
+      if (end && steps && end.dataset.follow === '1') end.value = steps.value;
+    }
+
+    function onSchedEndInput() {
+      const end = document.getElementById('schedEnd');
+      const steps = document.getElementById('stepsNum');
+      if (end && steps) end.dataset.follow = String(end.value) === String(steps.value) ? '1' : '0';
+      drawScheduleChart();
+    }
+
+    function scheduleWindow(stepCount) {
+      const steps = Math.max(1, stepCount | 0);
+      let start = Math.round(Number(document.getElementById('schedStart').value));
+      let end = Math.round(Number(document.getElementById('schedEnd').value));
+      if (!Number.isFinite(start) || start < 1) start = 1;
+      if (!Number.isFinite(end) || end < 1) end = steps;
+      if (end > steps) end = steps;
+      if (start > end) start = end;
+      return { first: start - 1, last: end };
+    }
+
     function drawScheduleChart() {
       const canvas = document.getElementById('scheduleChart');
       if (!canvas) return;
@@ -2248,7 +2890,7 @@
         : (Number(document.getElementById('stepsNum').value) || 20);
       const kind = activeScheduleKind();
       const sigmas = previewSigmas(kind, steps);
-      const maxS = Math.max(...sigmas, 1e-6);
+      const maxS = Math.max(1e-6, ...(sigmas.length ? sigmas : [0]));
       const left = 8;
       const right = w - 8;
       const top = 8;
@@ -2259,26 +2901,66 @@
       const skipped = runningSchedule
         ? jobSchedule.skipped
         : (isI2i() ? skippedDenoiseSteps(n, strength) : 0);
+      const span = scheduleWindow(steps);
       const samplerStep = Number(liveSamplerStep);
       const highlight = runningSchedule && samplerStep > 0 ? skipped + samplerStep - 1 : -1;
       sigmas.forEach((s, i) => {
         const bh = (s / maxS) * (bottom - top);
         const x = left + i * barW;
         const y = bottom - bh;
-        const dropped = i < skipped;
+        const outside = i < span.first || i > span.last;
+        const dropped = !outside && i < skipped;
         const active = i === highlight;
-        ctx.fillStyle = dropped
-          ? (i % 2 ? 'rgba(248,113,113,0.72)' : 'rgba(239,68,68,0.95)')
-          : active
-            ? 'rgba(251, 191, 36, 0.95)'
-            : (i % 2 ? 'rgba(129,140,248,0.55)' : 'rgba(99,102,241,0.85)');
+        ctx.fillStyle = outside
+          ? 'rgba(148,163,184,0.28)'
+          : dropped
+            ? (i % 2 ? 'rgba(248,113,113,0.72)' : 'rgba(239,68,68,0.95)')
+            : active
+              ? 'rgba(251, 191, 36, 0.95)'
+              : (i % 2 ? 'rgba(129,140,248,0.55)' : 'rgba(99,102,241,0.85)');
         ctx.beginPath();
         ctx.rect(x + 0.5, y, Math.max(1, barW - 1), bh);
         ctx.fill();
-        ctx.strokeStyle = dropped ? '#fecaca' : (active ? '#fef3c7' : '#c7d2fe');
+        ctx.strokeStyle = outside ? '#64748b' : (dropped ? '#fecaca' : (active ? '#fef3c7' : '#c7d2fe'));
         ctx.lineWidth = active ? 2 : 1;
         ctx.stroke();
       });
+      chartHover = { sigmas, left, barW, skipped };
+    }
+
+    let chartHover = { sigmas: [], left: 8, barW: 1, skipped: 0 };
+
+    function formatSigma(value) {
+      if (!Number.isFinite(value)) return '—';
+      const abs = Math.abs(value);
+      const digits = abs >= 10 ? 2 : (abs >= 1 ? 3 : 4);
+      return value.toFixed(digits);
+    }
+
+    function showScheduleTip(ev) {
+      const tip = document.getElementById('scheduleTip');
+      const canvas = document.getElementById('scheduleChart');
+      if (!tip || !canvas || !chartHover.sigmas.length) {
+        if (tip) tip.hidden = true;
+        return;
+      }
+      const rect = canvas.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const index = Math.floor((x - chartHover.left) / chartHover.barW);
+      const sigma = chartHover.sigmas[index];
+      if (sigma == null) {
+        tip.hidden = true;
+        return;
+      }
+      const skipped = index < chartHover.skipped;
+      const step = index - chartHover.skipped + 1;
+      tip.textContent = (skipped ? 'skipped' : ('step ' + step)) + ' · sigma ' + formatSigma(sigma);
+      tip.hidden = false;
+      const width = tip.offsetWidth || 120;
+      const left = Math.min(window.innerWidth - width - 8, ev.clientX + 12);
+      const top = Math.max(8, ev.clientY - 28);
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
     }
 
     let i2iSource = null;
@@ -2681,6 +3363,38 @@
       setNumericFields(['nagSigmaEnd'], extra.nag_sigma_end);
     }
 
+    function applyShapeSpanArgs(extra) {
+      if (extra.shape_min_sigma != null && extra.shape_min_sigma !== '') {
+        const sigma = document.querySelector('input[name="shapeSpan"][value="sigma"]');
+        if (sigma) sigma.checked = true;
+        const box = document.getElementById('shapeStopSigma');
+        if (box) {
+          box.value = extra.shape_min_sigma;
+          box.dataset.good = extra.shape_min_sigma;
+        }
+      } else if (extra.shape_stop_step != null && extra.shape_stop_step !== '') {
+        const step = document.querySelector('input[name="shapeSpan"][value="step"]');
+        if (step) step.checked = true;
+        const box = document.getElementById('shapeStopStep');
+        if (box) box.value = extra.shape_stop_step;
+      } else {
+        const all = document.querySelector('input[name="shapeSpan"][value="all"]');
+        if (all) all.checked = true;
+      }
+      syncShapeSpan();
+      correctShapeStopStep();
+      correctShapeStopSigma();
+      const strengthEl = document.getElementById('shapeStrength');
+      if (strengthEl) {
+        const raw = extra.shape_strength;
+        const n = Number(raw);
+        strengthEl.value = raw != null && raw !== '' && Number.isFinite(n)
+          ? String(Math.min(1, Math.max(0, n)))
+          : '1';
+        showShapeStrength();
+      }
+    }
+
     function applyGenerationRecord(record) {
       const sampling = record.sampling && typeof record.sampling === 'object' ? record.sampling : {};
       const guidance = sampling.guidance && typeof sampling.guidance === 'object' ? sampling.guidance : {};
@@ -2697,6 +3411,7 @@
       }
       const extra = parseExtraArgs(sampling.extra_sample_args);
       applyNagArgs(extra);
+      applyShapeSpanArgs(extra);
       const hasScheduler = Object.prototype.hasOwnProperty.call(sampling, 'scheduler');
       const schedulerName = typeof sampling.scheduler === 'string' ? sampling.scheduler : '';
       const designerFields = DESIGNER_FIELDS[schedulerName] || [];
@@ -3037,6 +3752,7 @@
       }
       drawScheduleChart();
       persistSession();
+      if (treeOn) refreshTreeChrome();
     }
 
     function collectPayload() {
@@ -3073,6 +3789,21 @@
         const scheduler = document.getElementById('scheduler').value;
         if (scheduler && scheduler !== DESIGNER_SENTINEL) payload.scheduler = scheduler;
       }
+      const stepsForWindow = Math.max(1, Number(payload.steps) || 1);
+      let scheduleStart = Math.round(Number(document.getElementById('schedStart').value));
+      let scheduleEnd = Math.round(Number(document.getElementById('schedEnd').value));
+      if (!Number.isFinite(scheduleStart) || scheduleStart < 1) scheduleStart = 1;
+      if (!Number.isFinite(scheduleEnd) || scheduleEnd < 1) scheduleEnd = stepsForWindow;
+      if (scheduleEnd > stepsForWindow) scheduleEnd = stepsForWindow;
+      if (scheduleStart > scheduleEnd) scheduleStart = scheduleEnd;
+      const windowExtra = 'schedule_start=' + scheduleStart + ',schedule_end=' + scheduleEnd;
+      payload.extra_sample_args = payload.extra_sample_args
+        ? payload.extra_sample_args + ',' + windowExtra
+        : windowExtra;
+      if (payload.sampler_name === 'euler_a') {
+        const eta = Number(document.getElementById('ancestralEta').value);
+        payload.eta = Number.isFinite(eta) ? Math.min(1, Math.max(0, eta)) : 1;
+      }
       payload.nag_prompt = document.getElementById('nagPrompt').value;
       const nagScale = Number(document.getElementById('nagScale').value);
       if (nagScale > 1) {
@@ -3089,6 +3820,24 @@
         payload.extra_sample_args = payload.extra_sample_args
           ? payload.extra_sample_args + ',' + nagExtra
           : nagExtra;
+      }
+      if (shapePayload()) {
+        const span = (document.querySelector('input[name="shapeSpan"]:checked') || {}).value || 'all';
+        let shapeExtra = '';
+        const shapeParts = ['shape_strength=' + document.getElementById('shapeStrength').value];
+        if (span === 'step') {
+          correctShapeStopStep();
+          shapeParts.push('shape_stop_step=' + document.getElementById('shapeStopStep').value);
+        } else if (span === 'sigma') {
+          correctShapeStopSigma();
+          shapeParts.push('shape_min_sigma=' + document.getElementById('shapeStopSigma').value);
+        }
+        shapeExtra = shapeParts.join(',');
+        if (shapeExtra) {
+          payload.extra_sample_args = payload.extra_sample_args
+            ? payload.extra_sample_args + ',' + shapeExtra
+            : shapeExtra;
+        }
       }
       return payload;
     }
@@ -3367,6 +4116,7 @@
     }
 
     function applyServerQueue(data) {
+      if (treeOn) return;
       const running = data && data.running;
       const pending = (data && data.pending) || [];
       pendingJobs = pending.map(jobFromServer).filter(Boolean);
@@ -3472,6 +4222,7 @@
           setStatusText(model ? ('Connected · ' + model) : 'Idle', false);
         }
         applyServerQueue(data);
+        if (treeOn) void pollLatentTree();
       } catch (e) {
         markUnreachable(e && e.message ? e.message : e);
       } finally {
@@ -3566,6 +4317,10 @@
     }
 
     async function enqueueGenerate() {
+      if (treeOn) {
+        await treeGenerate();
+        return;
+      }
       if (isH3()) {
         await enqueueVideo();
         return;
@@ -3634,6 +4389,13 @@
     }
 
     async function cancelCurrent() {
+      if (treeOn) {
+        setStatusText('Canceled', false);
+        try {
+          await fetch(apiBase + '/sdapi/v1/interrupt', { method: 'POST' });
+        } catch (e) { /* the run request reports the result */ }
+        return;
+      }
       if (!currentJob) return;
       const id = currentJob.id;
       cancelArmedId = id;
@@ -3889,6 +4651,62 @@
       if (!row || !btn) return;
       row.hidden = !(isFlux2Dev() || shapeState);
       btn.classList.toggle('is-on', !!shapeState);
+      const duration = document.getElementById('shapeDuration');
+      if (duration) duration.hidden = row.hidden;
+      const strengthRow = document.getElementById('shapeStrengthRow');
+      if (strengthRow) strengthRow.hidden = row.hidden;
+    }
+
+    function showShapeStrength() {
+      const el = document.getElementById('shapeStrength');
+      const out = document.getElementById('shapeStrengthValue');
+      if (!el || !out) return;
+      const n = Number(el.value);
+      out.textContent = Number.isFinite(n) ? n.toFixed(2) : '1.00';
+    }
+
+    function shapeSpanMode() {
+      return (document.querySelector('input[name="shapeSpan"]:checked') || {}).value || 'all';
+    }
+
+    function syncShapeSpan() {
+      const mode = shapeSpanMode();
+      const step = document.getElementById('shapeStopStep');
+      const sigma = document.getElementById('shapeStopSigma');
+      if (step) step.disabled = mode !== 'step';
+      if (sigma) sigma.disabled = mode !== 'sigma';
+    }
+
+    function currentStepCount() {
+      const n = Math.round(Number(document.getElementById('stepsNum').value));
+      if (!Number.isFinite(n) || n < 1) return 1;
+      return Math.min(100, n);
+    }
+
+    function correctShapeStopStep() {
+      const el = document.getElementById('shapeStopStep');
+      if (!el) return;
+      const max = currentStepCount();
+      const n = Number(String(el.value).trim());
+      let next = 1;
+      if (Number.isFinite(n) && n >= 1) next = Math.min(max, Math.round(n));
+      el.value = String(next);
+    }
+
+    function correctShapeStopSigma() {
+      const el = document.getElementById('shapeStopSigma');
+      if (!el) return;
+      const previous = el.dataset.good || '0.50';
+      const raw = String(el.value).trim();
+      const n = Number(raw);
+      if (raw === '' || !Number.isFinite(n)) {
+        el.value = previous;
+        return;
+      }
+      const clamped = Math.min(0.99, Math.max(0.01, n));
+      const text = clamped.toFixed(2);
+      el.value = text;
+      el.dataset.good = text;
     }
 
     function shapePayload() {
@@ -4515,6 +5333,64 @@
     }
 
     bindShapeEditor();
+    const shapeStrength = document.getElementById('shapeStrength');
+    if (shapeStrength) {
+      shapeStrength.addEventListener('input', showShapeStrength);
+      shapeStrength.addEventListener('change', () => {
+        showShapeStrength();
+        persistSession();
+      });
+    }
+    document.querySelectorAll('input[name="shapeSpan"]').forEach(radio => {
+      radio.addEventListener('change', () => {
+        syncShapeSpan();
+        if (shapeSpanMode() === 'step') correctShapeStopStep();
+        if (shapeSpanMode() === 'sigma') correctShapeStopSigma();
+        persistSession();
+      });
+    });
+    const shapeStopStepBox = document.getElementById('shapeStopStep');
+    const shapeStopSigmaBox = document.getElementById('shapeStopSigma');
+    if (shapeStopStepBox) {
+      shapeStopStepBox.addEventListener('blur', () => {
+        correctShapeStopStep();
+        persistSession();
+      });
+      shapeStopStepBox.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          correctShapeStopStep();
+          persistSession();
+          shapeStopStepBox.blur();
+        }
+      });
+    }
+    if (shapeStopSigmaBox) {
+      shapeStopSigmaBox.dataset.good = shapeStopSigmaBox.value || '0.50';
+      shapeStopSigmaBox.addEventListener('blur', () => {
+        correctShapeStopSigma();
+        persistSession();
+      });
+      shapeStopSigmaBox.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') {
+          correctShapeStopSigma();
+          persistSession();
+          shapeStopSigmaBox.blur();
+        }
+      });
+    }
+    const stepsSlider = document.getElementById('steps');
+    const stepsNumber = document.getElementById('stepsNum');
+    if (stepsSlider) stepsSlider.addEventListener('change', correctShapeStopStep);
+    if (stepsNumber) stepsNumber.addEventListener('change', correctShapeStopStep);
+    const scheduleChart = document.getElementById('scheduleChart');
+    if (scheduleChart) {
+      scheduleChart.addEventListener('mousemove', showScheduleTip);
+      scheduleChart.addEventListener('mouseleave', () => {
+        const tip = document.getElementById('scheduleTip');
+        if (tip) tip.hidden = true;
+      });
+    }
+    syncShapeSpan();
     restoreSession();
     rebuildSizeCalc();
     syncI2i();
@@ -4543,6 +5419,681 @@
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) void pullPreview();
     });
+    function syncTreeOffer() {
+      const button = document.getElementById('treeToggle');
+      if (!button) return;
+      button.hidden = treeOn || !isFlux2Dev();
+    }
+
+    function treeSnapshot() {
+      collectDesignerState();
+      return {
+        form: readFormState(),
+        designer: Object.assign({}, savedDesigner),
+        shapes: shapeSession(),
+      };
+    }
+
+    function treeDirty() {
+      if (!treeOn || !treeSelected || !treeConform) return false;
+      return JSON.stringify(treeSnapshot()) !== JSON.stringify(treeConform);
+    }
+
+    function selectedTreeCard() {
+      return treeCards.find(card => card.id === treeSelected) || null;
+    }
+
+    function loadTreeCard(card) {
+      const saved = card.settings || {};
+      applyFormState(saved.form || {});
+      savedDesigner = Object.assign({}, saved.designer || {});
+      if (saved.shapes) restoreShapeSession(saved.shapes);
+      else releaseShapes();
+      syncDesigner();
+      if (Number(card.sigma) <= 1e-6) {
+        document.getElementById('steps').value = '10';
+        document.getElementById('stepsNum').value = '10';
+        document.getElementById('treeStrength').value = '0.5';
+      } else {
+        const steps = String(card.remaining || 1);
+        document.getElementById('steps').value = steps;
+        document.getElementById('stepsNum').value = steps;
+      }
+      syncSchedEnd();
+      drawScheduleChart();
+      treeConform = treeSnapshot();
+      refreshTreeRevert();
+      refreshTreeChrome();
+    }
+
+    function selectTreeCard(id) {
+      if (treeRunning) return;
+      if (id === treeSelected) return;
+      if (treeDirty() && !window.confirm('Drop the edits on this card?')) return;
+      treeSelected = id;
+      treeFlip = false;
+      const card = selectedTreeCard();
+      if (card) loadTreeCard(card);
+      renderTree(true);
+    }
+
+    function syncOpReadouts() {
+      const dcw = Number(document.getElementById('dcwAmount').value);
+      const thresh = Number(document.getElementById('threshAmount').value);
+      document.getElementById('dcwReadout').textContent = Number.isFinite(dcw) ? dcw.toFixed(2) : '0.00';
+      document.getElementById('threshReadout').textContent = Number.isFinite(thresh) ? thresh.toFixed(3) : '1.000';
+    }
+
+    function mountTreeReverts() {
+      const pairs = [
+        ['prompt', 'prompt'],
+        ['negPrompt', 'negPrompt'],
+        ['nagPrompt', 'nagPrompt'],
+        ['nagScale', 'nagScale'],
+        ['nagTau', 'nagTau'],
+        ['nagAlpha', 'nagAlpha'],
+        ['nagSigmaEnd', 'nagSigmaEnd'],
+        ['seed', 'seed'],
+        ['stepsNum', 'steps'],
+        ['cfgNum', 'cfg'],
+        ['sampler', 'sampler'],
+        ['scheduler', 'scheduler'],
+        ['schedStart', 'schedStart'],
+        ['schedEnd', 'schedEnd'],
+        ['ancestralEta', 'ancestralEta'],
+        ['designerFormula', 'designerFormula'],
+        ['treeStrength', 'treeStrength'],
+      ];
+      pairs.forEach(([id, key]) => {
+        const el = document.getElementById(id);
+        if (!el || document.querySelector('[data-tree-revert="' + key + '"]')) return;
+        const host = el.closest('.field-group') || el.parentElement;
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-secondary tree-revert';
+        btn.dataset.treeRevert = key;
+        btn.textContent = 'revert';
+        btn.hidden = true;
+        btn.addEventListener('click', () => revertTreeField(key));
+        host.appendChild(btn);
+      });
+      const shapes = document.getElementById('shapeActions');
+      if (shapes && !shapes.querySelector('[data-tree-revert="shapes"]')) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn-secondary tree-revert';
+        btn.dataset.treeRevert = 'shapes';
+        btn.textContent = 'revert shapes';
+        btn.hidden = true;
+        btn.addEventListener('click', () => revertTreeField('shapes'));
+        shapes.appendChild(btn);
+      }
+    }
+
+    function revertTreeField(key) {
+      if (!treeConform) return;
+      const form = treeConform.form || {};
+      const set = (id, value) => {
+        const el = document.getElementById(id);
+        if (el && value != null) el.value = value;
+      };
+      if (key === 'steps') {
+        set('steps', form.steps);
+        set('stepsNum', form.steps);
+        drawScheduleChart();
+      } else if (key === 'cfg') {
+        set('cfg', form.cfg);
+        set('cfgNum', form.cfg);
+      } else if (key === 'scheduler' || key === 'designerFormula') {
+        set(key === 'scheduler' ? 'scheduler' : 'designerFormula', form[key]);
+        savedDesigner = Object.assign({}, treeConform.designer || {});
+        syncDesigner();
+        drawScheduleChart();
+      } else if (key === 'shapes') {
+        if (treeConform.shapes) restoreShapeSession(treeConform.shapes);
+        else releaseShapes();
+        applyFormState({
+          shapeSpan: form.shapeSpan,
+          shapeStopStep: form.shapeStopStep,
+          shapeStopSigma: form.shapeStopSigma,
+          shapeStrength: form.shapeStrength,
+        });
+      } else {
+        set(key, form[key]);
+      }
+      refreshTreeRevert();
+    }
+
+    function refreshTreeRevert() {
+      document.querySelectorAll('[data-tree-revert]').forEach(btn => {
+        btn.hidden = true;
+      });
+      if (!treeOn || !treeConform || treeRunning) return;
+      const snap = treeSnapshot();
+      const form = treeConform.form || {};
+      const show = (key, dirty) => {
+        const btn = document.querySelector('[data-tree-revert="' + key + '"]');
+        if (btn) btn.hidden = !dirty;
+      };
+      Object.keys(form).forEach(key => {
+        if (key === 'width' || key === 'height') return;
+        const mapped = key === 'steps' ? 'steps' : key === 'cfg' ? 'cfg' : key;
+        if (!document.querySelector('[data-tree-revert="' + mapped + '"]')) return;
+        show(mapped, String(snap.form[key]) !== String(form[key]));
+      });
+      show('shapes', JSON.stringify(snap.shapes) !== JSON.stringify(treeConform.shapes));
+      document.querySelectorAll('#designerControls [data-key]').forEach(el => {
+        const kind = document.getElementById('designerFormula').value;
+        const id = kind + '.' + el.dataset.key;
+        const saved = treeConform.designer ? treeConform.designer[id] : undefined;
+        const current = el.type === 'checkbox' ? el.checked : el.value;
+        const dirty = String(current) !== String(saved == null ? current : saved);
+        let btn = el.parentElement.querySelector('[data-tree-revert="designer.' + el.dataset.key + '"]');
+        if (!btn && dirty) {
+          btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn-secondary tree-revert';
+          btn.dataset.treeRevert = 'designer.' + el.dataset.key;
+          btn.textContent = 'revert';
+          btn.addEventListener('click', () => {
+            if (!treeConform || !treeConform.designer) return;
+            const value = treeConform.designer[id];
+            if (el.type === 'checkbox') el.checked = !!value;
+            else if (value != null) el.value = value;
+            collectDesignerState();
+            drawScheduleChart();
+            refreshTreeRevert();
+          });
+          el.parentElement.appendChild(btn);
+        }
+        if (btn) btn.hidden = !dirty;
+      });
+    }
+
+    function refreshTreeChrome() {
+      const card = selectedTreeCard();
+      const tip = card && Number(card.sigma) <= 1e-6;
+      document.getElementById('treeStrengthWrap').hidden = !treeOn || !tip;
+      document.getElementById('treeRerun').hidden = !treeOn;
+      const rerun = document.getElementById('treeRerun');
+      rerun.disabled = treeRunning || !card || card.parent === 0 || card.kind !== 'step';
+      const gen = document.getElementById('genBtn');
+      if (treeOn) {
+        gen.disabled = treeRunning || (treeCards.length > 0 && !card);
+      }
+      document.getElementById('treeBake').disabled = treeRunning || !card;
+      document.getElementById('treePaint').disabled = treeRunning || !card;
+      document.getElementById('treePaintLoad').disabled = treeRunning || !card;
+      const dcwAmount = Number(document.getElementById('dcwAmount').value);
+      const threshAmount = Number(document.getElementById('threshAmount').value);
+      document.getElementById('treeDcw').disabled = treeRunning || !card || !(dcwAmount > 0);
+      document.getElementById('treeThresh').disabled = treeRunning || !card || !(threshAmount < 1);
+      const note = document.getElementById('treeSeedNote');
+      if (!treeOn || !card) {
+        note.hidden = true;
+      } else if (tip) {
+        note.hidden = false;
+        note.textContent = 'Seed changes the img2img noise. The red number stays 0.';
+      } else if (card.kind === 'paint') {
+        note.hidden = false;
+        note.textContent = 'Seed re-noises this painted latent. The red number stays put.';
+      } else if (card.kind === 'dcw' || card.kind === 'threshold') {
+        note.hidden = false;
+        note.textContent = 'Seed re-noises this variant. The red number stays put.';
+      } else if (!card.ancestral) {
+        note.hidden = false;
+        note.textContent = 'Seed does not add noise for Euler.';
+      } else {
+        note.hidden = true;
+      }
+      const lock = treeOn && treeCards.length > 0;
+      ['width', 'height'].forEach(id => {
+        const el = document.getElementById(id);
+        if (lock) {
+          el.dataset.treeLocked = '1';
+          el.disabled = true;
+        } else if (el.dataset.treeLocked) {
+          el.disabled = false;
+          delete el.dataset.treeLocked;
+        }
+      });
+      if (!lock) applyShapeLock();
+      document.body.classList.toggle('tree-lock', treeOn && treeRunning);
+      if (treeOn && treeRunning) setCancelEnabled(true);
+    }
+
+    function treeCardUrl(card, clean) {
+      return apiBase + '/sdapi/v1/latent-tree/card?card=' + card.id + (clean ? '&view=clean' : '');
+    }
+
+    function renderTree(force) {
+      const host = document.getElementById('latentTree');
+      const sig = treeCards.map(card => card.id + ':' + card.parent + ':' + card.kind + ':' + card.sigma).join('|');
+      if (!force && sig === treeSig && host.childElementCount) {
+        host.querySelectorAll('.lt-card').forEach(node => {
+          node.classList.toggle('selected', Number(node.dataset.id) === treeSelected);
+        });
+        const card = selectedTreeCard();
+        const img = card && host.querySelector('.lt-card[data-id="' + card.id + '"] img');
+        if (img) img.src = treeCardUrl(card, !treeFlip);
+        return;
+      }
+      treeSig = sig;
+      const scroll = host.parentElement ? host.parentElement.scrollTop : 0;
+      host.innerHTML = '';
+      if (!treeCards.length) {
+        const empty = document.createElement('div');
+        empty.className = 'latent-empty';
+        empty.textContent = 'Generate to plant the root.';
+        host.appendChild(empty);
+        return;
+      }
+      const children = new Map();
+      treeCards.forEach(card => {
+        const parent = card.parent || 0;
+        if (!children.has(parent)) children.set(parent, []);
+        children.get(parent).push(card.id);
+      });
+      const x = new Map();
+      const depth = new Map();
+      let leaf = 0;
+      function walk(id, level) {
+        depth.set(id, level);
+        const kids = children.get(id) || [];
+        if (!kids.length) {
+          x.set(id, leaf++);
+          return;
+        }
+        kids.forEach(kid => walk(kid, level + 1));
+        const xs = kids.map(kid => x.get(kid));
+        x.set(id, (xs[0] + xs[xs.length - 1]) / 2);
+      }
+      treeCards.filter(card => !card.parent).forEach(card => walk(card.id, 0));
+      const maxDepth = Math.max(0, ...depth.values());
+      const col = 140;
+      const row = 168;
+      const width = Math.max(1, leaf) * col + 48;
+      const height = (maxDepth + 1) * row + 36;
+      host.style.width = width + 'px';
+      host.style.height = height + 'px';
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', '0 0 ' + width + ' ' + height);
+      const placed = new Map();
+      treeCards.forEach(card => {
+        const px = 24 + x.get(card.id) * col;
+        const py = 16 + (maxDepth - depth.get(card.id)) * row;
+        placed.set(card.id, { x: px, y: py, kind: card.kind });
+      });
+      treeCards.forEach(card => {
+        if (!card.parent || !placed.has(card.parent)) return;
+        const from = placed.get(card.parent);
+        const to = placed.get(card.id);
+        const x1 = from.x + 48;
+        const y1 = from.y;
+        const x2 = to.x + 48;
+        const y2 = to.y + 96;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x1);
+        line.setAttribute('y1', y1);
+        line.setAttribute('x2', x2);
+        line.setAttribute('y2', y2);
+        const branch = card.kind === 'paint' ? '#4c8dff' : card.kind === 'dcw' ? '#2fbf71' : card.kind === 'threshold' ? '#c084fc' : '';
+        if (branch) {
+          line.setAttribute('stroke', branch);
+          line.setAttribute('stroke-width', '2');
+        } else {
+          line.setAttribute('stroke', '#6b4226');
+          line.setAttribute('stroke-width', '8');
+          line.setAttribute('stroke-linecap', 'round');
+        }
+        svg.appendChild(line);
+        if (!branch) {
+          const grain = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          grain.setAttribute('x1', x1);
+          grain.setAttribute('y1', y1);
+          grain.setAttribute('x2', x2);
+          grain.setAttribute('y2', y2);
+          grain.setAttribute('stroke', '#c4a574');
+          grain.setAttribute('stroke-width', '2');
+          grain.setAttribute('stroke-dasharray', '3 5');
+          grain.setAttribute('stroke-linecap', 'round');
+          svg.appendChild(grain);
+        }
+      });
+      host.appendChild(svg);
+      treeCards.forEach(card => {
+        const spot = placed.get(card.id);
+        const node = document.createElement('div');
+        const kindClass = card.kind === 'paint' || card.kind === 'dcw' || card.kind === 'threshold' ? ' kind-' + card.kind : '';
+        const kindLabel = card.kind === 'paint' ? 'Paint ' : card.kind === 'dcw' ? 'DCW ' : card.kind === 'threshold' ? 'Threshold ' : 'Step ';
+        node.className = 'lt-card' + kindClass + (card.id === treeSelected ? ' selected' : '');
+        node.dataset.id = String(card.id);
+        node.setAttribute('role', 'button');
+        node.tabIndex = 0;
+        node.setAttribute('aria-label', kindLabel + Number(card.sigma).toFixed(3));
+        node.addEventListener('mousedown', () => {
+          node.dataset.wasSelected = treeSelected === card.id ? '1' : '0';
+        });
+        node.addEventListener('click', () => selectTreeCard(card.id));
+        node.addEventListener('dblclick', (ev) => {
+          ev.preventDefault();
+          if (treeRunning || node.dataset.wasSelected !== '1') return;
+          treeFlip = !treeFlip;
+          renderTree(true);
+        });
+        node.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') {
+            ev.preventDefault();
+            selectTreeCard(card.id);
+          }
+        });
+        const img = document.createElement('img');
+        img.alt = '';
+        img.src = treeCardUrl(card, card.id !== treeSelected || !treeFlip);
+        const chip = document.createElement('div');
+        chip.className = 'lt-sigma';
+        chip.textContent = Number(card.sigma).toFixed(3);
+        node.append(img, chip);
+        node.style.left = spot.x + 'px';
+        node.style.top = spot.y + 'px';
+        host.appendChild(node);
+      });
+      if (host.parentElement) host.parentElement.scrollTop = scroll;
+      refreshTreeChrome();
+    }
+
+    async function pollLatentTree() {
+      if (!treeOn) return;
+      try {
+        const res = await fetch(apiBase + '/sdapi/v1/latent-tree', { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        treeCards = Array.isArray(data.cards) ? data.cards : [];
+        if (treeSelected && !selectedTreeCard()) {
+          treeSelected = 0;
+          treeFlip = false;
+          treeConform = null;
+        }
+        renderTree(false);
+        refreshTreeChrome();
+      } catch (e) { /* the queue poll reports a dead server */ }
+    }
+
+    function setTreeMode(on) {
+      treeOn = on;
+      document.body.classList.toggle('latent-tree-on', on);
+      document.getElementById('latentTree').hidden = !on;
+      document.getElementById('treeTools').hidden = !on;
+      document.getElementById('treeRerun').hidden = !on;
+      syncTreeOffer();
+      if (on) {
+        treeSig = '';
+        renderTree(true);
+        refreshTreeChrome();
+        setStatusText('Latent Tree', false);
+        void pollLatentTree();
+      } else {
+        treeSelected = 0;
+        treeFlip = false;
+        treeConform = null;
+        cancelLeaveTree();
+        document.body.classList.remove('tree-lock');
+        refreshTreeChrome();
+      }
+    }
+
+    async function closeTreeSession() {
+      try {
+        await fetch(apiBase + '/sdapi/v1/latent-tree/close', { method: 'POST' });
+      } catch (e) { /* the mode is already closed on screen */ }
+    }
+
+    function askLeaveTree() {
+      document.getElementById('treeLeave').hidden = true;
+      document.getElementById('treeLeaveAsk').hidden = false;
+    }
+
+    function cancelLeaveTree() {
+      const ask = document.getElementById('treeLeaveAsk');
+      const leave = document.getElementById('treeLeave');
+      if (ask) ask.hidden = true;
+      if (leave) leave.hidden = false;
+    }
+
+    async function leaveTree() {
+      if (treeRunning) {
+        try {
+          await fetch(apiBase + '/sdapi/v1/interrupt', { method: 'POST' });
+        } catch (e) { /* the run request ends on its own */ }
+      }
+      treeCards = [];
+      treeRunning = false;
+      setTreeMode(false);
+      await closeTreeSession();
+    }
+
+    function treePayload(op, reseed) {
+      const payload = collectPayload();
+      payload.i2i = false;
+      payload.batch_size = 1;
+      payload.enable_hr = false;
+      payload.send_images = false;
+      delete payload.init_images;
+      if (op === 'tip') {
+        payload.denoising_strength = Number(document.getElementById('treeStrength').value) || 0.5;
+      }
+      payload.op = op;
+      payload.card = treeSelected || 0;
+      payload.reseed = !!reseed;
+      payload.settings = treeSnapshot();
+      return payload;
+    }
+
+    function chooseTreeOp(card) {
+      const snap = treeSnapshot();
+      const form = (treeConform && treeConform.form) || {};
+      const seedDirty = String(snap.form.seed) !== String(form.seed);
+      const scheduleDirty = String(snap.form.steps) !== String(form.steps)
+        || String(snap.form.scheduler) !== String(form.scheduler)
+        || String(snap.form.sampler) !== String(form.sampler)
+        || String(snap.form.schedStart) !== String(form.schedStart)
+        || String(snap.form.schedEnd) !== String(form.schedEnd)
+        || String(snap.form.ancestralEta) !== String(form.ancestralEta)
+        || String(snap.form.designerFormula) !== String(form.designerFormula)
+        || JSON.stringify(snap.designer) !== JSON.stringify(treeConform.designer || {});
+      const eulerish = snap.form.sampler === 'euler' || snap.form.sampler === 'euler_a';
+      const noise = seedDirty && (card.ancestral || card.kind !== 'step');
+      if (Number(card.sigma) <= 1e-6) return { op: 'tip', reseed: false };
+      if (!eulerish || scheduleDirty) return { op: 'reschedule', reseed: noise };
+      if (noise) return { op: 'reseed', reseed: true };
+      return { op: 'replay', reseed: false };
+    }
+
+    async function postTree(payload) {
+      treeRunning = true;
+      refreshTreeChrome();
+      setStatusText('Growing the tree', true);
+      try {
+        const res = await fetch(apiBase + '/sdapi/v1/latent-tree/run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!treeOn) return;
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        setStatusText(data.cancelled ? 'Canceled' : 'Latent Tree', false);
+      } catch (err) {
+        if (treeOn) setStatusText(err && err.message ? err.message : 'Latent Tree failed', false);
+      } finally {
+        treeRunning = false;
+        treeSig = '';
+        if (!treeOn) {
+          refreshTreeChrome();
+          return;
+        }
+        await pollLatentTree();
+        refreshTreeChrome();
+        refreshTreeRevert();
+      }
+    }
+
+    async function treeGenerate() {
+      if (treeRunning) return;
+      if (!isFlux2Dev()) {
+        setStatusText('Latent Tree is Flux 2 dev only', false);
+        return;
+      }
+      if (!treeCards.length) {
+        await postTree(treePayload('root', false));
+        return;
+      }
+      const card = selectedTreeCard();
+      if (!card) {
+        setStatusText('Select a card', false);
+        return;
+      }
+      const choice = chooseTreeOp(card);
+      await postTree(treePayload(choice.op, choice.reseed));
+    }
+
+    async function treeRerun() {
+      const card = selectedTreeCard();
+      if (!card || card.parent === 0 || card.kind !== 'step' || treeRunning) return;
+      await postTree(treePayload('rerun', false));
+    }
+
+    async function treeBake() {
+      const card = selectedTreeCard();
+      if (!card || treeRunning) return;
+      setStatusText('Baking the clean prediction', true);
+      try {
+        const res = await fetch(apiBase + '/sdapi/v1/latent-tree/bake', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card: card.id }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        if (data.file) setStatusFile('Baked ', data.file);
+        else setStatusText('Baked', false);
+        void refreshBrowser();
+      } catch (err) {
+        setStatusText(err && err.message ? err.message : 'Bake failed', false);
+      }
+    }
+
+    async function treePaintExport() {
+      const card = selectedTreeCard();
+      if (!card || treeRunning) return;
+      if (!window.confirm('The encoder invents channels the picture does not show. This writes a 16-bit TIFF of the clean prediction, not the latent.')) return;
+      setStatusText('Writing the paint file', true);
+      try {
+        const res = await fetch(apiBase + '/sdapi/v1/latent-tree/paint/export', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card: card.id }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        setStatusText('Paint file ' + (data.file || ''), false);
+      } catch (err) {
+        setStatusText(err && err.message ? err.message : 'Paint export failed', false);
+      }
+    }
+
+    async function treeOperate(op) {
+      const card = selectedTreeCard();
+      if (!card || treeRunning) return;
+      const amount = op === 'dcw'
+        ? Number(document.getElementById('dcwAmount').value)
+        : Number(document.getElementById('threshAmount').value);
+      const name = op === 'dcw' ? 'DCW' : 'Threshold';
+      setStatusText('Applying ' + name, true);
+      try {
+        const res = await fetch(apiBase + '/sdapi/v1/latent-tree/operate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ card: card.id, op: op, amount: amount }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        treeSig = '';
+        await pollLatentTree();
+        if (data.card) selectTreeCard(Number(data.card));
+        setStatusText(name + ' child added', false);
+      } catch (err) {
+        setStatusText(err && err.message ? err.message : (name + ' failed'), false);
+      }
+    }
+
+    async function treePaintImport(file) {
+      const card = selectedTreeCard();
+      if (!card || !file || treeRunning) return;
+      setStatusText('Encoding the paint file', true);
+      try {
+        const res = await fetch(apiBase + '/sdapi/v1/latent-tree/paint/import?card=' + card.id, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body: file,
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        treeSig = '';
+        await pollLatentTree();
+        setStatusText('Painted child added', false);
+      } catch (err) {
+        setStatusText(err && err.message ? err.message : 'Paint import failed', false);
+      }
+    }
+
+    function treeBoot() {
+      mountTreeReverts();
+      document.getElementById('treeToggle').addEventListener('click', () => {
+        if (!isFlux2Dev()) {
+          setStatusText('Latent Tree is Flux 2 dev only', false);
+          return;
+        }
+        setTreeMode(true);
+      });
+      document.getElementById('treeLeave').addEventListener('click', askLeaveTree);
+      document.getElementById('treeLeaveNo').addEventListener('click', cancelLeaveTree);
+      document.getElementById('treeLeaveYes').addEventListener('click', () => { void leaveTree(); });
+      document.getElementById('treeRerun').addEventListener('click', () => { void treeRerun(); });
+      document.getElementById('treeBake').addEventListener('click', () => { void treeBake(); });
+      document.getElementById('treePaint').addEventListener('click', () => { void treePaintExport(); });
+      document.getElementById('treePaintLoad').addEventListener('click', () => {
+        document.getElementById('treePaintFile').click();
+      });
+      document.getElementById('treePaintFile').addEventListener('change', (ev) => {
+        const file = ev.target.files && ev.target.files[0];
+        ev.target.value = '';
+        if (file) void treePaintImport(file);
+      });
+      document.getElementById('treeDcw').addEventListener('click', () => { void treeOperate('dcw'); });
+      document.getElementById('treeThresh').addEventListener('click', () => { void treeOperate('threshold'); });
+      document.getElementById('dcwAmount').addEventListener('input', () => {
+        syncOpReadouts();
+        if (treeOn) refreshTreeChrome();
+      });
+      document.getElementById('threshAmount').addEventListener('input', () => {
+        syncOpReadouts();
+        if (treeOn) refreshTreeChrome();
+      });
+      document.querySelector('.controls').addEventListener('input', () => {
+        if (treeOn) refreshTreeRevert();
+      });
+      document.querySelector('.controls').addEventListener('change', () => {
+        if (treeOn) refreshTreeRevert();
+      });
+      syncOpReadouts();
+      syncSamplerExtras();
+      syncTreeOffer();
+      const sampler = document.getElementById('sampler');
+      if (sampler) sampler.addEventListener('change', syncSamplerExtras);
+    }
+
+    treeBoot();
     void refreshSavedSettings();
     installSteppers(document);
     renderQueue();

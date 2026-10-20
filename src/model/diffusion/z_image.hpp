@@ -584,8 +584,16 @@ namespace ZImage {
                                  const sd::Tensor<float>& context_tensor,
                                  const std::vector<sd::Tensor<float>>& ref_latents_tensor = {},
                                  Rope::RefIndexMode ref_index_mode                        = Rope::RefIndexMode::FIXED) {
-            ggml_cgraph* gf        = new_graph_custom(Z_IMAGE_GRAPH_SIZE);
+            size_t graph_size = Z_IMAGE_GRAPH_SIZE;
+            if (graph_grads_enabled) {
+                graph_size *= 8;
+            }
+            ggml_cgraph* gf        = new_graph_custom(graph_size);
             ggml_tensor* x         = make_input(x_tensor);
+            if (graph_grads_enabled) {
+                ggml_set_name(x, "dno_x");
+                ggml_set_param(x);
+            }
             ggml_tensor* timesteps = make_input(timesteps_tensor);
             GGML_ASSERT(x->ne[3] == 1);
             GGML_ASSERT(!context_tensor.empty());
@@ -623,6 +631,9 @@ namespace ZImage {
                                                context,
                                                pe,
                                                ref_latents);
+            if (graph_grads_enabled) {
+                ggml_set_name(out, "dno_pred");
+            }
 
             ggml_build_forward_expand(gf, out);
 

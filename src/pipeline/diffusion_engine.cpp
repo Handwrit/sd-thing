@@ -136,7 +136,9 @@ StableDiffusionGGML::StableDiffusionGGML()
     : rng(std::make_shared<PhiloxRNG>()),
       denoiser(std::make_shared<CompVisDenoiser>()) {}
 
-StableDiffusionGGML::~StableDiffusionGGML() = default;
+StableDiffusionGGML::~StableDiffusionGGML() {
+    sd::tree::session_release(this);
+}
 
 const std::map<StableDiffusionGGML::RunnerGroup, std::set<ModelComponent>>& StableDiffusionGGML::runner_components() {
     static const std::map<RunnerGroup, std::set<ModelComponent>> components{
@@ -2170,7 +2172,8 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
                                               const sd_cache_params_t* cache_params,
                                               bool preview_final_step,
                                               const sd::Tensor<float>& video_positions,
-                                              const SDCondition* nag_cond) {
+                                              const SDCondition* nag_cond,
+                                              sd::tree::LatentTreeHooks* latent_tree) {
     struct RunnerEndOnExit {
         GGMLRunner* runner = nullptr;
         ~RunnerEndOnExit() {
@@ -2192,6 +2195,45 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
     float img_cfg_scale = guidance.img_cfg;
     float slg_scale     = guidance.slg.scale;
     bool slg_uncond     = sd::guidance::parse_skip_layer_guidance_uncond_arg(extra_sample_args);
+    int shape_stop_step = 0;
+    bool shape_sigma_limit = false;
+    float shape_min_sigma  = 0.f;
+    float shape_strength   = 1.f;
+    bool dcw_set           = false;
+    float dcw_amount       = 0.f;
+    for (const auto& [key, value] : parse_key_value_args(extra_sample_args, "extra sample arg")) {
+        if (key == "shape_stop_step") {
+            int parsed = 0;
+            if (!parse_strict_int(value, parsed) || parsed < 1) {
+                LOG_WARN("ignoring invalid shape_stop_step '%s'", value.c_str());
+            } else {
+                shape_stop_step = parsed;
+            }
+        } else if (key == "shape_min_sigma") {
+            float parsed = 0.f;
+            if (!parse_strict_float(value, parsed)) {
+                LOG_WARN("ignoring invalid shape_min_sigma '%s'", value.c_str());
+            } else {
+                shape_sigma_limit = true;
+                shape_min_sigma   = parsed;
+            }
+        } else if (key == "shape_strength") {
+            float parsed = 0.f;
+            if (!parse_strict_float(value, parsed)) {
+                LOG_WARN("ignoring invalid shape_strength '%s'", value.c_str());
+            } else {
+                shape_strength = std::min(1.f, std::max(0.f, parsed));
+            }
+        } else if (key == "dcw_amount") {
+            float parsed = 0.f;
+            if (!parse_strict_float(value, parsed) || !std::isfinite(parsed)) {
+                LOG_WARN("ignoring invalid dcw_amount '%s'", value.c_str());
+            } else {
+                dcw_set    = true;
+                dcw_amount = parsed;
+            }
+        }
+    }
 
     std::vector<float> guidance_schedule = sd::guidance::parse_guidance_schedule(extra_sample_args);
     if (!guidance_schedule.empty() && guidance_schedule.size() != sigmas.size() - 1) {
@@ -2410,8 +2452,26 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
                     flux_extra.nag_tau     = nag_params.tau;
                     flux_extra.nag_alpha   = nag_params.alpha;
                 }
-                if (!condition.shape_token_masks.empty()) {
-                    flux_extra.shape_token_masks = &condition.shape_token_masks;
+                std::vector<ShapeTokenMask> scaled_shape_masks;
+                if (!condition.shape_token_masks.empty() && shape_strength > 0.f) {
+                    const int logical_step = step < 0 ? -step : step;
+                    const bool by_sigma    = !shape_sigma_limit || sigma >= shape_min_sigma;
+                    const bool by_step     = shape_stop_step < 1 || (logical_step > 0 && logical_step <= shape_stop_step);
+                    if (by_sigma && by_step) {
+                        if (shape_strength >= 0.999f) {
+                            flux_extra.shape_token_masks = &condition.shape_token_masks;
+                        } else {
+                            // Empty cells rise toward 1, so the ban becomes log(1 - strength).
+                            scaled_shape_masks = condition.shape_token_masks;
+                            const float keep   = 1.f - shape_strength;
+                            for (ShapeTokenMask& mask : scaled_shape_masks) {
+                                for (float& weight : mask.weights) {
+                                    weight = keep + shape_strength * weight;
+                                }
+                            }
+                            flux_extra.shape_token_masks = &scaled_shape_masks;
+                        }
+                    }
                 }
                 diffusion_params.extra = flux_extra;
             } else if (version == VERSION_QWEN_IMAGE_2_1) {
@@ -2582,7 +2642,23 @@ sd::Tensor<float> StableDiffusionGGML::sample(const std::shared_ptr<DiffusionMod
         return output;
     };
 
-    auto x0_opt = sample_k_diffusion(method, denoise, x_t, sigmas, sampler_rng, eta, is_flow_denoiser, extra_sample_args, denoiser);
+    sd::tree::LatentTreeHooks dcw_hooks;
+    sd::tree::LatentTreeHooks* tree_hooks = latent_tree;
+    if (dcw_set) {
+        if (tree_hooks == nullptr) {
+            tree_hooks = &dcw_hooks;
+        }
+        tree_hooks->dcw_amount = dcw_amount;
+    }
+    if (tree_hooks != nullptr) {
+        if (tree_hooks->sigma_ref <= 0.f && !sigmas.empty()) {
+            tree_hooks->sigma_ref = sigmas.front();
+        }
+        if (!tree_hooks->rng) {
+            tree_hooks->rng = sampler_rng;
+        }
+    }
+    auto x0_opt = sample_k_diffusion(method, denoise, x_t, sigmas, sampler_rng, eta, is_flow_denoiser, extra_sample_args, denoiser, tree_hooks);
     if (x0_opt.empty()) {
         if (get_cancel_flag() == SD_CANCEL_ALL) {
             LOG_INFO("generation canceled");

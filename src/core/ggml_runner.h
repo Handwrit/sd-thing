@@ -176,6 +176,7 @@ protected:
     const std::string final_result_name = "ggml_runner_final_result_tensor";
 
     bool flash_attn_enabled    = false;
+    bool graph_grads_enabled   = false;
     float linear_scale         = 0.f;
     float attn_scale           = 0.f;
     bool conv2d_direct_enabled = false;
@@ -335,6 +336,18 @@ public:
 
     void set_flash_attention_enabled(bool enabled) {
         flash_attn_enabled = enabled;
+    }
+
+    void set_graph_grads_enabled(bool enabled) {
+        graph_grads_enabled = enabled;
+    }
+
+    ggml_context* active_compute_ctx() const {
+        return compute_ctx;
+    }
+
+    void append_backward(ggml_cgraph* graph) {
+        ggml_build_backward_expand(compute_ctx, graph, nullptr);
     }
 
     void set_scale_overrides(float linear_scale, float attn_scale) {
