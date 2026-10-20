@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <memory>
 #include <random>
 #include <vector>
@@ -218,6 +219,40 @@ void geodesic_step(float* z, const float* grad, int64_t n, float angle) {
     }
 }
 
+// shortcut: a view aliases its parent, so only contiguous adjoints are cuts; one block must still fit beside the resident weights.
+void mark_activation_grad_cuts(ggml_cgraph* graph) {
+    const int n_nodes = ggml_graph_n_nodes(graph);
+    for (int i = 0; i < n_nodes; ++i) {
+        ggml_tensor* node = ggml_graph_node(graph, i);
+        if (!sd::ggml_graph_cut::is_graph_cut_tensor(node)) {
+            continue;
+        }
+        const char* payload = node->name + std::strlen(sd::ggml_graph_cut::GGML_RUNNER_CUT_PREFIX);
+        if (std::strncmp(payload, "bwd.", 4) == 0) {
+            continue;
+        }
+        std::string body(payload);
+        if (!body.empty() && body.back() == '|') {
+            body.pop_back();
+        }
+        const size_t sep = body.find('|');
+        if (sep == std::string::npos || body.substr(sep + 1) == "t_emb") {
+            continue;
+        }
+        ggml_tensor* grad = ggml_graph_get_grad(graph, node);
+        if (grad == nullptr || grad->view_src != nullptr || !ggml_is_contiguous(grad) ||
+            sd::ggml_graph_cut::is_graph_cut_tensor(grad)) {
+            continue;
+        }
+        std::string group = "bwd." + body;
+        std::replace(group.begin(), group.end(), '|', '.');
+        sd::ggml_graph_cut::mark_graph_cut(grad, group, "g");
+        if (!sd::ggml_graph_cut::is_graph_cut_tensor(grad)) {
+            LOG_ERROR("zit-dno could not name an activation adjoint cut");
+        }
+    }
+}
+
 struct GraphScope {
     GGMLRunner* runner;
     DifferentiableOpsScope ops;
@@ -273,6 +308,8 @@ bool flow_step(ZImage::ZImageRunner* model,
             ggml_set_loss(loss);
             ggml_build_forward_expand(graph, loss);
             model->append_backward(graph);
+            // Layer adjoints become cuts so a tape that does not fit runs one block at a time.
+            mark_activation_grad_cuts(graph);
             grad_tensor = ggml_graph_get_grad(graph, input);
             if (grad_tensor == nullptr) {
                 LOG_ERROR("zit-dno backward did not produce an input gradient");
@@ -346,14 +383,36 @@ bool backward_latent(ZImage::ZImageRunner* model,
                     int n_steps,
                     int backward_steps,
                     const std::vector<Tensor<float>>& states,
-                    Tensor<float>& grad) {
+                    Tensor<float>& grad,
+                    bool stabilize,
+                    double* adjoint_scale) {
     Tensor<float> adjoint = states.back();
     float* adjoint_data   = adjoint.data();
     for (int64_t i = 0; i < adjoint.numel(); ++i) {
         adjoint_data[i] *= 2.f;
     }
+    // One step already reaches about 1e17. The map is linear in the adjoint,
+    // so the next step overflows float32 products. Dividing a large adjoint
+    // by its peak keeps the direction and leaves headroom. adjoint_scale is
+    // that divisor, so a host penalty can be added back in the original units.
+    double scale = 1.0;
     const int first = n_steps - backward_steps;
     for (int step = n_steps - 1; step >= first; --step) {
+        if (stabilize) {
+            float* data          = adjoint.data();
+            const int64_t count  = adjoint.numel();
+            float peak           = 0.f;
+            for (int64_t i = 0; i < count; ++i) {
+                peak = std::max(peak, std::fabs(data[i]));
+            }
+            if (peak > 1.0e4f) {
+                const float inv = 1.f / peak;
+                for (int64_t i = 0; i < count; ++i) {
+                    data[i] *= inv;
+                }
+                scale *= static_cast<double>(peak);
+            }
+        }
         const std::vector<float> timesteps = sd->prepare_sample_timesteps(sigmas[static_cast<size_t>(step)], 0);
         Tensor<float> next;
         Tensor<float> step_grad;
@@ -368,7 +427,17 @@ bool backward_latent(ZImage::ZImageRunner* model,
                        step_grad)) {
             return false;
         }
+        const float* step_grad_data = step_grad.data();
+        for (int64_t i = 0; i < step_grad.numel(); ++i) {
+            if (!std::isfinite(step_grad_data[i])) {
+                LOG_ERROR("zit-dno backward step %d gradient is not finite", step);
+                return false;
+            }
+        }
         adjoint = std::move(step_grad);
+    }
+    if (adjoint_scale != nullptr) {
+        *adjoint_scale = scale;
     }
     grad = std::move(adjoint);
     return true;
@@ -390,7 +459,7 @@ bool check_chain(ZImage::ZImageRunner* model,
         return false;
     }
     Tensor<float> adjoint;
-    if (!backward_latent(model, sd, n_threads, context, sigmas, n_steps, n_steps, states, adjoint)) {
+    if (!backward_latent(model, sd, n_threads, context, sigmas, n_steps, n_steps, states, adjoint, false, nullptr)) {
         return false;
     }
     const double backward_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
@@ -494,7 +563,8 @@ bool iterate_once(ZImage::ZImageRunner* model,
     }
 
     Tensor<float> grad;
-    if (!backward_latent(model, sd, n_threads, context, sigmas, n_steps, backward_steps, states, grad)) {
+    double adjoint_scale = 1.0;
+    if (!backward_latent(model, sd, n_threads, context, sigmas, n_steps, backward_steps, states, grad, true, &adjoint_scale)) {
         return false;
     }
     Tensor<float> moved = states[static_cast<size_t>(resume)];
@@ -504,8 +574,9 @@ bool iterate_once(ZImage::ZImageRunner* model,
     const auto perms = make_permutations(static_cast<int>(moved.numel()), kPerms, seed + 17);
     std::vector<float> penalty(static_cast<size_t>(moved.numel()), 0.f);
     penalty_gradient(moved.data(), static_cast<int>(moved.numel()), perms, penalty.data());
+    const double penalty_gain = static_cast<double>(kGamma) / adjoint_scale;
     for (int64_t i = 0; i < moved.numel(); ++i) {
-        grad.data()[i] += kGamma * penalty[static_cast<size_t>(i)];
+        grad.data()[i] += static_cast<float>(penalty_gain * static_cast<double>(penalty[static_cast<size_t>(i)]));
     }
 
     const double radius_before = std::sqrt(dot(moved.data(), moved.data(), moved.numel()));
@@ -520,13 +591,14 @@ bool iterate_once(ZImage::ZImageRunner* model,
     for (int64_t i = 0; i < moved.numel(); ++i) {
         shifted = std::max(shifted, std::fabs(static_cast<double>(moved.data()[i]) - before[static_cast<size_t>(i)]));
     }
-    LOG_INFO("zit-dno iteration 0 loss %.8g sigma %.4f backward %d reforward %d step max abs %.6g radius %.6g",
+    LOG_INFO("zit-dno iteration 0 loss %.8g sigma %.4f backward %d reforward %d step max abs %.6g radius %.6g adjoint scale %.6g",
              sum_squares(states.back()),
              sigmas[static_cast<size_t>(resume)],
              backward_steps,
              reforward_steps,
              shifted,
-             radius_after);
+             radius_after,
+             adjoint_scale);
     if (!(shifted > 0.0)) {
         return false;
     }

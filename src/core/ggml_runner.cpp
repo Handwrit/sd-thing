@@ -830,7 +830,9 @@ std::optional<Tensor<float>> GGMLRunner::execute_graph(ggml_cgraph* graph, int n
             break;
         }
     }
-    const bool segmented = !graph_grads_enabled && !defines_loss && !is_multi_device() && !sd_backend_is_cpu(runtime_backend) &&
+    // A backward tape is one segment unless the activation adjoints were marked as cuts.
+    // Graphs that fit stay monolithic, so a step that already fits does not change.
+    const bool segmented = !is_multi_device() && !sd_backend_is_cpu(runtime_backend) &&
                            manager != nullptr && manager->segmented_compute_enabled() &&
                            cached_plan.valid && cached_plan.has_cuts && cached_plan.segments.size() > 1 &&
                            !fits(memory_requests(full_measurement.buffers, cache_.pending_bytes(graph)), params);
@@ -948,8 +950,46 @@ std::optional<Tensor<float>> GGMLRunner::execute_graph(ggml_cgraph* graph, int n
             return fail_segment("allocated capacity check");
         }
         copy_data_to_backend_tensor(segment_graph, false);
-        if (defines_loss) {
+        if (defines_loss && !segmented) {
             ggml_graph_reset(segment_graph);
+        } else if (defines_loss) {
+            // The loss node is not a source of its own backward, so a cut segment
+            // can allocate the scalar seed without containing that node. A zero
+            // seed drops the tape and leaves only the host penalty.
+            auto uses_seed = [&](ggml_tensor* seed) {
+                for (int i = 0; i < ggml_graph_n_nodes(segment_graph); ++i) {
+                    ggml_tensor* node = ggml_graph_node(segment_graph, i);
+                    if (node == seed || (node != nullptr && node->view_src == seed)) {
+                        return true;
+                    }
+                    if (node == nullptr) {
+                        continue;
+                    }
+                    for (int src = 0; src < GGML_MAX_SRC; ++src) {
+                        if (node->src[src] == seed) {
+                            return true;
+                        }
+                    }
+                }
+                for (int i = 0; i < sd::ggml_graph_cut::leaf_count(segment_graph); ++i) {
+                    if (sd::ggml_graph_cut::leaf_tensor(segment_graph, i) == seed) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            for (int node_index = 0; node_index < ggml_graph_n_nodes(graph); ++node_index) {
+                ggml_tensor* node = ggml_graph_node(graph, node_index);
+                if (node == nullptr || (node->flags & GGML_TENSOR_FLAG_LOSS) == 0) {
+                    continue;
+                }
+                ggml_tensor* seed = ggml_graph_get_grad_acc(graph, node);
+                if (seed == nullptr || seed->buffer == nullptr || !uses_seed(seed)) {
+                    continue;
+                }
+                const float one = 1.f;
+                ggml_backend_tensor_set(seed, &one, 0, sizeof(float));
+            }
         }
         auto prefetch_requests = memory_requests(measurement.buffers, new_cache_bytes);
         if (!prefetch_requests.empty()) {
