@@ -852,10 +852,20 @@
       overflow: auto;
       border-style: solid;
     }
-    body.tree-lock .controls :is(input, textarea, select, button):not(#cancelBtn):not(#treeLeave):not(#treeLeaveNo):not(#treeLeaveYes) {
+    body.tree-lock .controls :is(input, textarea, select, button):not(#cancelBtn):not(#treeLeave):not(#treeLeaveNo):not(#treeLeaveYes):not(#bellMode):not(#treeBell) {
       pointer-events: none;
       opacity: 0.55;
     }
+    .bell-choice {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex: 0 0 auto;
+      margin: 0;
+      text-transform: none;
+      letter-spacing: 0;
+    }
+    .bell-choice select { width: auto; padding: 0.35rem 0.45rem; }
     #treeLeaveAsk {
       flex-basis: 100%;
       display: flex;
@@ -911,6 +921,14 @@
       <div id="status" class="status">Ready (Target: Port 1493, ComfyUI RNG)</div>
       <button id="treeToggle" class="btn-secondary tree-enter" type="button" hidden>Latent Tree</button>
       <div class="gen-actions">
+        <label class="bell-choice" title="Chime when a generation finishes">
+          Bell
+          <select id="bellMode">
+            <option value="off">off</option>
+            <option value="each">each gen</option>
+            <option value="queue">queue done</option>
+          </select>
+        </label>
         <button id="cancelBtn" class="btn-cancel" type="button" disabled onclick="cancelCurrent()">Cancel</button>
         <button id="treeRerun" class="btn-secondary" type="button" hidden>Re-run this step</button>
         <button id="genBtn" class="btn-primary" type="button" onclick="enqueueGenerate()">Generate Image</button>
@@ -937,6 +955,7 @@
       <button id="treePaint" class="btn-secondary" type="button">Paint</button>
       <button id="treePaintLoad" class="btn-secondary" type="button">Load paint</button>
       <input id="treePaintFile" type="file" accept=".tif,.tiff,image/tiff" hidden />
+      <label title="Chime when a branch finishes"><input type="checkbox" id="treeBell" style="width:auto" /> Bell</label>
       <button id="treeLeave" class="btn-secondary" type="button">Leave</button>
       <div id="treeLeaveAsk" hidden>
         <span>Leave Latent Tree?</span>
@@ -1035,7 +1054,7 @@
     </div>
 
     <!-- CFG Scale -->
-    <div class="field-group">
+    <div class="field-group" id="cfgGroup">
       <label>CFG Scale</label>
       <div class="slider-row">
         <input type="range" id="cfg" min="1" max="25" step="0.5" value="7.0" oninput="cfgNum.value = this.value" />
@@ -1169,7 +1188,7 @@
         <label>Batch Size</label>
         <input type="number" id="batchSize" min="1" max="8" value="1" />
       </div>
-      <div class="field-group" style="flex:1">
+      <div class="field-group" id="clipSkipGroup" style="flex:1">
         <label>Clip Skip</label>
         <input type="number" id="clipSkip" min="1" max="4" value="1" />
       </div>
@@ -1272,8 +1291,8 @@
         <button class="btn-secondary shape-tool" type="button" data-shape-tool="hard">Hard <kbd class="shape-key">H</kbd></button>
         <button class="btn-secondary shape-tool" type="button" data-shape-tool="soft">Soft <kbd class="shape-key">S</kbd></button>
         <label>Size <kbd class="shape-key">[ ]</kbd> <input type="range" id="shapeSize" min="1" max="48" step="1" value="8" /></label>
-        <label>Opacity <input type="range" id="shapeOpacity" min="0.05" max="1" step="0.05" value="1" /></label>
-        <button class="btn-secondary" type="button" id="shapeModeBtn">Draw <kbd class="shape-key">E</kbd></button>
+        <label>Opacity <input type="range" id="shapeOpacity" min="0" max="1" step="0.05" value="1" /></label>
+        <button class="btn-secondary" type="button" id="shapeModeBtn">Erase <kbd class="shape-key">E</kbd></button>
         <button class="btn-secondary" type="button" id="shapeViewBtn">Blended <kbd class="shape-key">V</kbd></button>
         <button class="btn-secondary" type="button" id="shapeInvertBtn">Invert <kbd class="shape-key">I</kbd></button>
         <button class="btn-secondary" type="button" id="shapeClearBtn">Clear <kbd class="shape-key">C</kbd></button>
@@ -1416,6 +1435,7 @@
       set('stepsNum', form.steps);
       set('cfg', form.cfg);
       set('cfgNum', form.cfg);
+      lockH3Cfg();
       set('width', form.width);
       set('height', form.height);
       if (form.sampler === 'ddim_trailing') {
@@ -2690,8 +2710,45 @@
       return name.includes('qwen') && name.includes('2.1');
     }
 
+    function lockH3Cfg() {
+      const on = isH3();
+      const range = document.getElementById('cfg');
+      const num = document.getElementById('cfgNum');
+      const group = document.getElementById('cfgGroup');
+      if (on) {
+        if (range) range.value = '1';
+        if (num) num.value = '1';
+      }
+      if (range) {
+        range.disabled = on;
+        range.title = on ? 'MiniMax-H3 runs at CFG 1' : '';
+      }
+      if (num) num.title = on ? 'MiniMax-H3 runs at CFG 1' : '';
+      setSteppedEnabled('cfgNum', !on);
+      if (group) group.classList.toggle('is-off', on);
+    }
+
     function isRef2va() {
       return connectedModel.toLowerCase().includes('ref2va');
+    }
+
+    function supportsClipSkip() {
+      const name = (connectedModel || '').toLowerCase();
+      const family = modelFamily();
+      if (family === 'sdxl') return true;
+      if (name.includes('sd3') || name.includes('sd-3')) return true;
+      if (family !== 'sd') return false;
+      const notClip = ['z-image', 'z_image', 'zimage', 'chroma', 'ovis', 'sefi', 'krea', 'boogu', 'longcat', 'hidream', 'sensenova', 'lingbot', 'minit2i'];
+      return !notClip.some(part => name.includes(part));
+    }
+
+    function syncClipSkip() {
+      const on = supportsClipSkip();
+      const input = document.getElementById('clipSkip');
+      const group = document.getElementById('clipSkipGroup');
+      setSteppedEnabled('clipSkip', on);
+      if (input) input.title = on ? '' : 'This model does not use CLIP skip';
+      if (group) group.classList.toggle('is-off', !on);
     }
 
     function setSteppedEnabled(id, on) {
@@ -2786,6 +2843,8 @@
       const strengthGroup = document.getElementById('i2iStrengthGroup');
       if (strengthGroup) strengthGroup.classList.toggle('is-off', h3);
       syncNagControls();
+      syncClipSkip();
+      lockH3Cfg();
       syncRefDims();
       if (h3) {
         strength.disabled = true;
@@ -2795,8 +2854,6 @@
         if (h3AppliedFor !== connectedModel && !shapeState) {
           document.getElementById('width').value = '864';
           document.getElementById('height').value = '480';
-          document.getElementById('cfg').value = '1';
-          document.getElementById('cfgNum').value = '1';
           const frames = document.getElementById('videoFrames');
           if (frames) frames.value = '5';
           h3AppliedFor = connectedModel;
@@ -3341,6 +3398,7 @@
         const el = document.getElementById(id);
         if (el) el.value = text;
       });
+      if (ids.indexOf('cfg') !== -1 || ids.indexOf('cfgNum') !== -1) lockH3Cfg();
       return true;
     }
 
@@ -4115,6 +4173,63 @@
       serverReachable = false;
     }
 
+    let bellCtx = null;
+
+    function unlockBell() {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
+      if (!bellCtx) bellCtx = new AC();
+      if (bellCtx.state === 'suspended') void bellCtx.resume();
+    }
+
+    function ringBell() {
+      // shortcut: a chime before the first click stays silent, the browser blocks audio until a gesture.
+      if (!bellCtx) return;
+      const play = () => {
+        if (bellCtx.state !== 'running') return;
+        const t = bellCtx.currentTime;
+        const osc = bellCtx.createOscillator();
+        const gain = bellCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, t);
+        osc.frequency.exponentialRampToValueAtTime(440, t + 0.15);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
+        osc.connect(gain);
+        gain.connect(bellCtx.destination);
+        osc.start(t);
+        osc.stop(t + 0.34);
+      };
+      if (bellCtx.state === 'suspended') {
+        bellCtx.resume().then(play).catch(() => {});
+        return;
+      }
+      play();
+    }
+
+    function maybeRingGen() {
+      const mode = document.getElementById('bellMode').value;
+      if (mode !== 'each' && mode !== 'queue') return;
+      if (mode === 'queue' && (currentJob || pendingJobs.length)) return;
+      ringBell();
+    }
+
+    function ringTree() {
+      const box = document.getElementById('treeBell');
+      if (!box || !box.checked) return;
+      ringBell();
+    }
+
+    function loadBellPrefs() {
+      const mode = localStorage.getItem('studio-bell');
+      const sel = document.getElementById('bellMode');
+      if (sel && (mode === 'off' || mode === 'each' || mode === 'queue')) sel.value = mode;
+      const tree = localStorage.getItem('studio-tree-bell');
+      const box = document.getElementById('treeBell');
+      if (box) box.checked = tree === '1';
+    }
+
     function applyServerQueue(data) {
       if (treeOn) return;
       const running = data && data.running;
@@ -4180,10 +4295,12 @@
           } else if (finished.status === 'failed') {
             setStatusText('Error: generation failed', false);
             dlog('job failed ' + finished.id);
+            maybeRingGen();
           } else {
             const savedText = newest ? ('  Saved: ' + newest) : '';
             setStatusText('Done!' + savedText, false);
             dlog('job done ' + finished.id + savedText);
+            maybeRingGen();
             if (autoShowResult && newest) {
               selectedOutput = newest;
               void refreshBrowser(newest);
@@ -4507,6 +4624,7 @@
     });
     let shapeState = null;
     let shapePainting = false;
+    let shapeStroke = null;
     let shapeLast = null;
     let shapeAnchor = null;
     let shapePointer = null;
@@ -4593,7 +4711,6 @@
         tool: shapeState.tool,
         size: shapeState.size,
         opacity: shapeState.opacity,
-        erase: shapeState.erase,
         words: shapeState.words.map(word => ({
           start: word.start,
           end: word.end,
@@ -4618,8 +4735,7 @@
         view: saved.view === 'solo' || saved.view === 'fade' ? saved.view : 'blended',
         tool: saved.tool === 'pencil' || saved.tool === 'soft' ? saved.tool : 'hard',
         size: Number(saved.size) || 8,
-        opacity: Number(saved.opacity) || 1,
-        erase: !!saved.erase,
+        opacity: saved.erase ? 0 : (Number.isFinite(Number(saved.opacity)) ? Number(saved.opacity) : 1),
         words: saved.words.map(word => ({
           start: Number(word.start) || 0,
           end: Number(word.end) || 0,
@@ -4770,10 +4886,16 @@
       opacity.value = String(shapeState.opacity);
       const mode = document.getElementById('shapeModeBtn');
       const view = document.getElementById('shapeViewBtn');
-      mode.textContent = shapeState.erase ? 'Erase' : 'Draw';
+      mode.textContent = shapeState.opacity > 0 ? 'Erase' : 'Draw';
       mode.append(shapeKey('E'));
       view.textContent = shapeState.view === 'solo' ? 'Solo' : (shapeState.view === 'fade' ? 'Fade' : 'Blended');
       view.append(shapeKey('V'));
+    }
+
+    function swapShapeOpacity() {
+      if (!shapeState) return;
+      shapeState.opacity = shapeState.opacity > 0 ? 0 : 1;
+      syncShapeControls();
     }
 
     function shapeKey(text) {
@@ -4921,16 +5043,20 @@
       const word = shapeState.words[shapeState.selected];
       if (!word) return;
       const cells = shapeCells(word);
-      const opacity = Number(shapeState.opacity) || 1;
-      const target = shapeState.erase ? 0 : 1;
+      const opacity = Number(shapeState.opacity);
+      const amount = Number.isFinite(opacity) ? Math.min(1, Math.max(0, opacity)) : 1;
       const paint = (gx, gy, stamp) => {
-        if (gx < 0 || gy < 0 || gx >= shapeState.gridW || gy >= shapeState.gridH || stamp <= 0) return;
+        if (gx < 0 || gy < 0 || gx >= shapeState.gridW || gy >= shapeState.gridH) return;
         const index = gy * shapeState.gridW + gx;
-        const current = cells[index] / 255;
-        cells[index] = Math.max(0, Math.min(255, Math.round((current + (target - current) * stamp) * 255)));
+        let value = Math.max(0, Math.min(1, stamp));
+        if (shapeStroke) {
+          if (shapeStroke[index] > value) value = shapeStroke[index];
+          shapeStroke[index] = value;
+        }
+        cells[index] = Math.round(value * 255);
       };
       if (shapeState.tool === 'pencil') {
-        paint(Math.floor(px), Math.floor(py), opacity);
+        paint(Math.floor(px), Math.floor(py), amount);
         return;
       }
       const radius = Math.max(0.5, Number(shapeState.size) / 2);
@@ -4943,15 +5069,27 @@
           const dist = Math.hypot(gx + 0.5 - px, gy + 0.5 - py);
           if (dist > radius) continue;
           const falloff = shapeState.tool === 'soft' ? 1 - dist / radius : 1;
-          paint(gx, gy, opacity * falloff);
+          paint(gx, gy, amount * falloff);
         }
       }
     }
 
+    function beginShapeStroke() {
+      shapeStroke = new Float32Array(shapeState.gridW * shapeState.gridH);
+      shapeStroke.fill(-1);
+    }
+
+    function endShapeStroke() {
+      shapeStroke = null;
+    }
+
     function strokeShape(to) {
+      const ownStroke = !shapeStroke;
+      if (ownStroke) beginShapeStroke();
       if (!shapeLast) {
         stampShape(to.x, to.y);
         shapeLast = to;
+        if (ownStroke) endShapeStroke();
         return;
       }
       const dist = Math.hypot(to.x - shapeLast.x, to.y - shapeLast.y);
@@ -4961,6 +5099,7 @@
         stampShape(shapeLast.x + (to.x - shapeLast.x) * t, shapeLast.y + (to.y - shapeLast.y) * t);
       }
       shapeLast = to;
+      if (ownStroke) endShapeStroke();
     }
 
     function copyShapeOver(sourceIndex) {
@@ -5083,7 +5222,6 @@
         tool: 'hard',
         size: 8,
         opacity: 1,
-        erase: false,
       };
       shapeCheckpoint = null;
       document.getElementById('prompt').value = promptText;
@@ -5123,7 +5261,6 @@
           tool: 'hard',
           size: 8,
           opacity: 1,
-          erase: false,
         };
         applyShapeLock();
         persistSession();
@@ -5171,6 +5308,7 @@
     function dropShapes() {
       shapeState = null;
       shapePainting = false;
+      endShapeStroke();
       document.getElementById('shapeOverlay').hidden = true;
       cancelDropShapes();
       applyShapeLock();
@@ -5210,13 +5348,11 @@
         flashBrushSize();
       });
       document.getElementById('shapeOpacity').addEventListener('input', (ev) => {
-        if (shapeState) shapeState.opacity = Number(ev.target.value);
-      });
-      document.getElementById('shapeModeBtn').addEventListener('click', () => {
         if (!shapeState) return;
-        shapeState.erase = !shapeState.erase;
+        shapeState.opacity = Number(ev.target.value);
         syncShapeControls();
       });
+      document.getElementById('shapeModeBtn').addEventListener('click', swapShapeOpacity);
       document.getElementById('shapeViewBtn').addEventListener('click', cycleShapeView);
       const board = document.getElementById('shapeBoard');
       board.addEventListener('pointerdown', (ev) => {
@@ -5239,6 +5375,7 @@
         }
         shapeGuide = null;
         shapePainting = true;
+        beginShapeStroke();
         board.setPointerCapture(ev.pointerId);
         shapeLast = null;
         strokeShape(point);
@@ -5264,6 +5401,7 @@
       const endStroke = () => {
         if (!shapePainting) return;
         shapePainting = false;
+        endShapeStroke();
         shapeAnchor = shapeLast;
         shapeLast = null;
         persistSession();
@@ -5310,8 +5448,7 @@
           if (shapeState.showBrush) flashBrushSize();
         } else if (key === 'e') {
           ev.preventDefault();
-          shapeState.erase = !shapeState.erase;
-          syncShapeControls();
+          swapShapeOpacity();
         } else if (key === 'v') {
           ev.preventDefault();
           cycleShapeView();
@@ -5544,6 +5681,7 @@
       } else if (key === 'cfg') {
         set('cfg', form.cfg);
         set('cfgNum', form.cfg);
+        lockH3Cfg();
       } else if (key === 'scheduler' || key === 'designerFormula') {
         set(key === 'scheduler' ? 'scheduler' : 'designerFormula', form[key]);
         savedDesigner = Object.assign({}, treeConform.designer || {});
@@ -5923,8 +6061,12 @@
         if (!treeOn) return;
         if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
         setStatusText(data.cancelled ? 'Canceled' : 'Latent Tree', false);
+        if (!data.cancelled) ringTree();
       } catch (err) {
-        if (treeOn) setStatusText(err && err.message ? err.message : 'Latent Tree failed', false);
+        if (treeOn) {
+          setStatusText(err && err.message ? err.message : 'Latent Tree failed', false);
+          ringTree();
+        }
       } finally {
         treeRunning = false;
         treeSig = '';
@@ -6093,6 +6235,20 @@
       if (sampler) sampler.addEventListener('change', syncSamplerExtras);
     }
 
+    loadBellPrefs();
+    document.getElementById('bellMode').addEventListener('change', () => {
+      localStorage.setItem('studio-bell', document.getElementById('bellMode').value);
+      unlockBell();
+    });
+    document.getElementById('treeBell').addEventListener('change', () => {
+      const on = document.getElementById('treeBell').checked;
+      localStorage.setItem('studio-tree-bell', on ? '1' : '0');
+      if (on) unlockBell();
+    });
+    document.addEventListener('pointerdown', function armBell() {
+      unlockBell();
+      document.removeEventListener('pointerdown', armBell, true);
+    }, true);
     treeBoot();
     void refreshSavedSettings();
     installSteppers(document);
