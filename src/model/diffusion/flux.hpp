@@ -1864,6 +1864,12 @@ namespace Flux {
                 }
                 return std::log(weight);
             };
+            std::vector<int> shaped_tokens;
+            for (int token = 0; token < n_txt; ++token) {
+                if (by_token[static_cast<size_t>(token)] != nullptr) {
+                    shaped_tokens.push_back(token);
+                }
+            }
             for (int query = 0; query < length; ++query) {
                 const bool query_text   = query < n_txt;
                 const int query_cell    = query - n_txt;
@@ -1877,6 +1883,19 @@ namespace Flux {
                         bias = bias_for(query, key_cell);
                     } else if (key_text && query_canvas) {
                         bias = bias_for(key, query_cell);
+                    } else if (query_canvas && key_canvas && query_cell != key_cell) {
+                        // Image cells would otherwise carry a word out of the cells that word is allowed to use.
+                        for (int token : shaped_tokens) {
+                            const float left  = bias_for(token, query_cell);
+                            const float right = bias_for(token, key_cell);
+                            if (left == right) {
+                                continue;
+                            }
+                            const float limit = left < right ? left : right;
+                            if (limit < bias) {
+                                bias = limit;
+                            }
+                        }
                     }
                     if (bias != 0.f) {
                         shape_mask_vec[static_cast<size_t>(key) + static_cast<size_t>(query) * static_cast<size_t>(length)] = bias;

@@ -852,7 +852,7 @@
       overflow: auto;
       border-style: solid;
     }
-    body.tree-lock .controls :is(input, textarea, select, button):not(#cancelBtn):not(#treeLeave):not(#treeLeaveNo):not(#treeLeaveYes):not(#bellMode):not(#treeBell) {
+    body.tree-lock .controls :is(input, textarea, select, button):not(#cancelBtn):not(#treeLeave):not(#treeLeaveNo):not(#treeLeaveYes):not(#bellMode):not(#bellTest):not(#bellStop):not(#treeBell) {
       pointer-events: none;
       opacity: 0.55;
     }
@@ -929,6 +929,8 @@
             <option value="queue">queue done</option>
           </select>
         </label>
+        <button id="bellTest" class="btn-secondary" type="button" title="Play the completion chime once">Test bell</button>
+        <button id="bellStop" class="btn-secondary" type="button" hidden>Stop bell</button>
         <button id="cancelBtn" class="btn-cancel" type="button" disabled onclick="cancelCurrent()">Cancel</button>
         <button id="treeRerun" class="btn-secondary" type="button" hidden>Re-run this step</button>
         <button id="genBtn" class="btn-primary" type="button" onclick="enqueueGenerate()">Generate Image</button>
@@ -1913,6 +1915,7 @@
           label: 'Flux.2 dev',
           rotate: true,
           groups: [
+            { title: '0.59 MP', sizes: [[768, 768]] },
             { title: '1 MP', sizes: [[1024, 1024], [1152, 896], [1216, 832], [1344, 768], [1536, 640]] },
           ],
         };
@@ -1993,6 +1996,7 @@
       document.getElementById('height').value = h;
       syncSizeReadout();
       syncSizeSelection();
+      syncShapeButton();
       persistSession();
       if (isI2i()) updateI2iPreview();
     }
@@ -4143,6 +4147,7 @@
     }
 
     let seenFinishedId = null;
+    let seenFinishedReady = false;
     let lastLoggedStep = null;
     let pollBusy = false;
     let serverReachable = null;
@@ -4174,6 +4179,7 @@
     }
 
     let bellCtx = null;
+    let bellRepeat = null;
 
     function unlockBell() {
       const AC = window.AudioContext || window.webkitAudioContext;
@@ -4188,18 +4194,35 @@
       const play = () => {
         if (bellCtx.state !== 'running') return;
         const t = bellCtx.currentTime;
-        const osc = bellCtx.createOscillator();
-        const gain = bellCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, t);
-        osc.frequency.exponentialRampToValueAtTime(440, t + 0.15);
-        gain.gain.setValueAtTime(0.0001, t);
-        gain.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
-        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
-        osc.connect(gain);
-        gain.connect(bellCtx.destination);
-        osc.start(t);
-        osc.stop(t + 0.34);
+        const master = bellCtx.createGain();
+        master.gain.value = 0.22;
+        master.connect(bellCtx.destination);
+        // Church-bell ratios. The prime is the weak partial; the strike is the nominal, twelfth, and upper octave.
+        const prime = 440;
+        const partials = [
+          [0.5, 0.14, 1.7],
+          [0.502, 0.08, 1.7],
+          [1, 0.18, 1.25],
+          [1.183, 0.32, 0.85],
+          [1.506, 0.16, 0.6],
+          [2, 0.62, 0.55],
+          [2.006, 0.22, 0.5],
+          [2.514, 0.2, 0.32],
+          [3.011, 0.5, 0.24],
+          [4.166, 0.38, 0.14],
+        ];
+        for (const [ratio, amp, dur] of partials) {
+          const osc = bellCtx.createOscillator();
+          const gain = bellCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.value = prime * ratio;
+          gain.gain.setValueAtTime(amp, t);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+          osc.connect(gain);
+          gain.connect(master);
+          osc.start(t);
+          osc.stop(t + dur + 0.02);
+        }
       };
       if (bellCtx.state === 'suspended') {
         bellCtx.resume().then(play).catch(() => {});
@@ -4208,17 +4231,55 @@
       play();
     }
 
+    function stopBell() {
+      if (bellRepeat) {
+        clearInterval(bellRepeat);
+        bellRepeat = null;
+      }
+      const btn = document.getElementById('bellStop');
+      if (btn) btn.hidden = true;
+    }
+
+    function startBell() {
+      ringBell();
+      const btn = document.getElementById('bellStop');
+      if (btn) btn.hidden = false;
+      if (bellRepeat) return;
+      bellRepeat = setInterval(ringBell, 2200);
+    }
+
     function maybeRingGen() {
       const mode = document.getElementById('bellMode').value;
       if (mode !== 'each' && mode !== 'queue') return;
       if (mode === 'queue' && (currentJob || pendingJobs.length)) return;
-      ringBell();
+      startBell();
+    }
+
+    function testBell() {
+      unlockBell();
+      if (!bellCtx) {
+        setStatusText('Bell: this browser has no audio', false);
+        return;
+      }
+      const play = () => {
+        if (bellCtx.state !== 'running') {
+          setStatusText('Bell: browser blocked the sound', false);
+          return;
+        }
+        ringBell();
+        setStatusText('Bell test', false);
+      };
+      if (bellCtx.state === 'suspended') {
+        bellCtx.resume().then(play).catch(() => setStatusText('Bell: browser blocked the sound', false));
+        return;
+      }
+      play();
     }
 
     function ringTree() {
       const box = document.getElementById('treeBell');
       if (!box || !box.checked) return;
-      ringBell();
+      startBell();
     }
 
     function loadBellPrefs() {
@@ -4282,31 +4343,30 @@
       }
 
       const finished = data && data.last_finished;
-      if (finished && finished.id) {
-        if (seenFinishedId === null) {
-          seenFinishedId = finished.id;
-        } else if (finished.id !== seenFinishedId) {
-          seenFinishedId = finished.id;
-          const files = finished.output_files || [];
-          const newest = files.length ? String(files[0]).split(/[\\/]/).pop() : null;
-          if (finished.status === 'cancelled') {
-            setStatusText('Canceled', false);
-            dlog('job cancelled ' + finished.id);
-          } else if (finished.status === 'failed') {
-            setStatusText('Error: generation failed', false);
-            dlog('job failed ' + finished.id);
-            maybeRingGen();
+      if (!seenFinishedReady) {
+        seenFinishedId = finished && finished.id ? finished.id : null;
+        seenFinishedReady = true;
+      } else if (finished && finished.id && finished.id !== seenFinishedId) {
+        seenFinishedId = finished.id;
+        const files = finished.output_files || [];
+        const newest = files.length ? String(files[0]).split(/[\\/]/).pop() : null;
+        if (finished.status === 'cancelled') {
+          setStatusText('Canceled', false);
+          dlog('job cancelled ' + finished.id);
+        } else if (finished.status === 'failed') {
+          setStatusText('Error: generation failed', false);
+          dlog('job failed ' + finished.id);
+          maybeRingGen();
+        } else {
+          const savedText = newest ? ('  Saved: ' + newest) : '';
+          setStatusText('Done!' + savedText, false);
+          dlog('job done ' + finished.id + savedText);
+          maybeRingGen();
+          if (autoShowResult && newest) {
+            selectedOutput = newest;
+            void refreshBrowser(newest);
           } else {
-            const savedText = newest ? ('  Saved: ' + newest) : '';
-            setStatusText('Done!' + savedText, false);
-            dlog('job done ' + finished.id + savedText);
-            maybeRingGen();
-            if (autoShowResult && newest) {
-              selectedOutput = newest;
-              void refreshBrowser(newest);
-            } else {
-              void refreshBrowser();
-            }
+            void refreshBrowser();
           }
         }
       }
@@ -4334,7 +4394,7 @@
         serverReachable = true;
         pollDelay = POLL_OK;
         if (wasDown) {
-          seenFinishedId = null;
+          seenFinishedReady = false;
           const model = await pingServer();
           setStatusText(model ? ('Connected · ' + model) : 'Idle', false);
         }
@@ -4577,6 +4637,7 @@
       drawScheduleChart();
       syncSizeReadout();
       syncSizeSelection();
+      syncShapeButton();
       if (isI2i() && i2iSource) updateI2iPreview();
     });
     controls.addEventListener('change', () => {
@@ -4585,6 +4646,7 @@
       drawScheduleChart();
       syncSizeReadout();
       syncSizeSelection();
+      syncShapeButton();
       if (isI2i() && i2iSource) updateI2iPreview();
     });
     restoreClientLog();
@@ -4761,16 +4823,34 @@
       syncShapeButton();
     }
 
+    function shapeSizeSupported() {
+      if (!isFlux2Dev()) return false;
+      const w = Number(document.getElementById('width').value);
+      const h = Number(document.getElementById('height').value);
+      const profile = sizeProfile();
+      return profile.groups.some(group => group.sizes.some(([sw, sh]) =>
+        (sw === w && sh === h) || (profile.rotate && sw === h && sh === w)));
+    }
+
     function syncShapeButton() {
+      if (isFlux2Dev() && shapeState && !shapeSizeSupported()) {
+        releaseShapes();
+        setStatusText('Shapes need a Flux.2 dev size from the list', false);
+        return;
+      }
       const row = document.getElementById('shapeActions');
       const btn = document.getElementById('useShapesBtn');
       if (!row || !btn) return;
+      const allowed = !isFlux2Dev() || shapeSizeSupported();
       row.hidden = !(isFlux2Dev() || shapeState);
+      btn.disabled = isFlux2Dev() && !allowed;
+      btn.title = btn.disabled ? 'Pick a Flux.2 dev size from the list' : '';
       btn.classList.toggle('is-on', !!shapeState);
+      const showExtras = !!shapeState || (isFlux2Dev() && allowed);
       const duration = document.getElementById('shapeDuration');
-      if (duration) duration.hidden = row.hidden;
+      if (duration) duration.hidden = !showExtras;
       const strengthRow = document.getElementById('shapeStrengthRow');
-      if (strengthRow) strengthRow.hidden = row.hidden;
+      if (strengthRow) strengthRow.hidden = !showExtras;
     }
 
     function showShapeStrength() {
@@ -4826,7 +4906,7 @@
     }
 
     function shapePayload() {
-      if (!shapeState || !isFlux2Dev()) return null;
+      if (!shapeState || !isFlux2Dev() || !shapeSizeSupported()) return null;
       const masks = [];
       shapeState.words.forEach(word => {
         if (!wordHasPaint(word)) return;
@@ -5235,6 +5315,10 @@
 
     function openShapeEditor() {
       if (!isFlux2Dev() && !shapeState) return;
+      if (isFlux2Dev() && !shapeSizeSupported()) {
+        setStatusText('Shapes need a Flux.2 dev size from the list', false);
+        return;
+      }
       shapeCheckpoint = shapeState ? shapeSession() : null;
       if (!shapeState) {
         const width = Number(document.getElementById('width').value);
@@ -5554,7 +5638,13 @@
       }
     });
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) void pullPreview();
+      if (!document.hidden) {
+        void pullPreview();
+        if (bellRepeat) {
+          unlockBell();
+          ringBell();
+        }
+      }
     });
     function syncTreeOffer() {
       const button = document.getElementById('treeToggle');
@@ -6236,19 +6326,20 @@
     }
 
     loadBellPrefs();
+    document.getElementById('bellTest').addEventListener('click', testBell);
+    document.getElementById('bellStop').addEventListener('click', stopBell);
     document.getElementById('bellMode').addEventListener('change', () => {
-      localStorage.setItem('studio-bell', document.getElementById('bellMode').value);
-      unlockBell();
+      const mode = document.getElementById('bellMode').value;
+      localStorage.setItem('studio-bell', mode);
+      if (mode === 'off') stopBell();
+      else unlockBell();
     });
     document.getElementById('treeBell').addEventListener('change', () => {
       const on = document.getElementById('treeBell').checked;
       localStorage.setItem('studio-tree-bell', on ? '1' : '0');
       if (on) unlockBell();
     });
-    document.addEventListener('pointerdown', function armBell() {
-      unlockBell();
-      document.removeEventListener('pointerdown', armBell, true);
-    }, true);
+    document.addEventListener('pointerdown', () => { unlockBell(); }, true);
     treeBoot();
     void refreshSavedSettings();
     installSteppers(document);
